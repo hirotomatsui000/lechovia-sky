@@ -967,8 +967,11 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   - **Status:** time left, targets standing, and aircraft left per team.
   - **Targets (both sides):** each target has a ground marker with its letter and an HP bar, and an edge arrow when
     off-screen. Destroyed targets are crossed out.
-  - **Attacker:** bombs left (`BMB 8`) in the weapons status. The predicted impact point is drawn on the ground,
-    joined to the flight-path marker by a fall line. `RELEASE` flashes while it lies within a target's 30 m radius.
+  - **Attacker:** bombs left (`BMB 8`) in the weapons status. On a bombing run (the predicted impact within 2.5 km
+    of a standing target) the impact point is drawn on the ground, joined to the flight-path marker by a fall line.
+    `RELEASE` flashes while it lies within a target's 30 m radius. (Before revision 20 the cue showed whenever bombs
+    were aboard: from altitude its fall line hung from the gun sight to the bottom of the screen all the way in, and
+    the owner took it for a broken aiming line.)
   - **Defender:** banners `TARGET B UNDER ATTACK` (when a target is hit, at most once per 3 s per target) and
     `TARGET B DESTROYED`; the kill feed also records destroyed targets.
 - **G effects:** blackout vignette when > 7 G is sustained for more than 2 s; red tint below −2.5 G (a third as strong

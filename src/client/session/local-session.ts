@@ -293,11 +293,12 @@ export class LocalSession implements GameSession {
     for (const p of this.world.projectileList()) {
       let v = this.projectilePool[i];
       if (!v) {
-        v = { team: p.team, position: new Vector3(), velocity: new Vector3() };
+        v = { team: p.team, position: new Vector3(), velocity: new Vector3(), ageS: 0 };
         this.projectilePool.push(v);
       }
       v.team = p.team;
       v.position.lerpVectors(p.prevPos, p.pos, alpha);
+      v.ageS = Math.max(0, p.ageS - (1 - alpha) * DT);
       projectileVelocity(p, v.velocity);
       this.projectileViews.push(v);
       i++;

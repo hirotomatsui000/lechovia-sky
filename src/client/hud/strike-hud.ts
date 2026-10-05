@@ -31,13 +31,24 @@ export function strikeStatusLines(s: StrikeStatus, timeLeftS: number, standing: 
   ];
 }
 
+/**
+ * The bomb cue (impact point and fall line) shows only on a bombing run: with the predicted impact this close to a
+ * standing target. Shown whenever bombs were aboard, the fall line hung from the flight-path marker to the bottom of
+ * the screen all the way from 20 km out, through the gun sight; the owner took it for a broken aiming line.
+ */
+export const BOMB_CUE_RANGE_M = 2500;
+
+const near = (impact: Vector3, targets: readonly GroundTargetView[], rangeM: number) =>
+  targets.some((t) => !t.destroyed && Math.hypot(impact.x - t.position.x, impact.z - t.position.z) <= rangeM);
+
+/** The predicted impact to draw, or null when no standing target is near it. */
+export function bombCue(impact: Vector3 | null, targets: readonly GroundTargetView[]): Vector3 | null {
+  return impact && near(impact, targets, BOMB_CUE_RANGE_M) ? impact : null;
+}
+
 /** True while the predicted impact point lies within a standing target's full-damage radius. */
 export function releaseCue(impact: Vector3 | null, targets: readonly GroundTargetView[]): boolean {
-  if (!impact) return false;
-  for (const t of targets) {
-    if (!t.destroyed && Math.hypot(impact.x - t.position.x, impact.z - t.position.z) <= BOMB_ANVIL.fullDamageRadiusM) return true;
-  }
-  return false;
+  return impact !== null && near(impact, targets, BOMB_ANVIL.fullDamageRadiusM);
 }
 
 export function targetDestroyedText(targetId: string): string {

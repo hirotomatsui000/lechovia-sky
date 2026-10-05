@@ -2,7 +2,7 @@ import { AdditiveBlending, BufferAttribute, BufferGeometry, DynamicDrawUsage, Li
 import type { ProjectileView } from '../../session/game-session.ts';
 import { applyParticleFrame, createParticleMaterial, type ParticleFrame } from './particles.ts';
 
-/** Seconds of flight each tracer streak covers (about 35 m). */
+/** Seconds of flight each tracer streak covers (about 35 m), or less while the round is newer than that. */
 const STREAK_S = 0.03;
 const HEAD_SIZE_M = 1.6;
 const HEAD = [1, 0.85, 0.45];
@@ -56,12 +56,15 @@ export class Tracers {
       if (n >= this.capacity) break;
       const a = p.position;
       const v = p.velocity;
+      // Never behind the gun: a full-length streak on a round just fired reached back past the chase camera and
+      // showed as a line from the jet to the bottom of the screen.
+      const back = Math.min(STREAK_S, p.ageS);
       this.linePos[n * 6] = a.x;
       this.linePos[n * 6 + 1] = a.y;
       this.linePos[n * 6 + 2] = a.z;
-      this.linePos[n * 6 + 3] = a.x - v.x * STREAK_S;
-      this.linePos[n * 6 + 4] = a.y - v.y * STREAK_S;
-      this.linePos[n * 6 + 5] = a.z - v.z * STREAK_S;
+      this.linePos[n * 6 + 3] = a.x - v.x * back;
+      this.linePos[n * 6 + 4] = a.y - v.y * back;
+      this.linePos[n * 6 + 5] = a.z - v.z * back;
       this.headPos[n * 3] = a.x;
       this.headPos[n * 3 + 1] = a.y;
       this.headPos[n * 3 + 2] = a.z;

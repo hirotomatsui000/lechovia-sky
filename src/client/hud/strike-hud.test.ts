@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { StrikeStatus } from '../../shared/modes/mode.ts';
 import type { GroundTargetView } from '../session/game-session.ts';
-import { releaseCue, strikeStatusLines, TargetAlerts, targetDestroyedText } from './strike-hud.ts';
+import { BOMB_CUE_RANGE_M, bombCue, releaseCue, strikeStatusLines, TargetAlerts, targetDestroyedText } from './strike-hud.ts';
 
 const status: StrikeStatus = { attacker: 'russia', defender: 'usa', aircraftLeft: { usa: 4, russia: 3 }, targetsDestroyed: 1, targetsToWin: 2, reason: null };
 const target = (id: string, x: number, destroyed = false): GroundTargetView => ({ id, kind: 'radar', label: id, position: new Vector3(x, 100, 0), maxHp: 100, hp: destroyed ? 0 : 100, destroyed });
@@ -30,6 +30,16 @@ describe('strike HUD', () => {
     expect(releaseCue(new Vector3(40, 100, 0), targets)).toBe(false);
     expect(releaseCue(new Vector3(1000, 100, 0), targets)).toBe(false);
     expect(releaseCue(null, targets)).toBe(false);
+  });
+
+  it('shows the bomb cue only on a run: the impact near a standing target, not from far out', () => {
+    const targets = [target('A', 0), target('B', 10000, true)];
+    const near = new Vector3(BOMB_CUE_RANGE_M - 100, 100, 0);
+    expect(bombCue(near, targets)).toBe(near);
+    expect(bombCue(new Vector3(BOMB_CUE_RANGE_M + 100, 100, 0), targets)).toBeNull();
+    // Near a destroyed target only: nothing to bomb there.
+    expect(bombCue(new Vector3(10000, 100, 0), targets)).toBeNull();
+    expect(bombCue(null, targets)).toBeNull();
   });
 
   it('warns about an attacked target at most once every 3 s', () => {

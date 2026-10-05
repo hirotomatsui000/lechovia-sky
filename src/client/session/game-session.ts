@@ -94,6 +94,8 @@ export interface ProjectileView {
   /** interpolated for smooth rendering */
   readonly position: Vector3;
   readonly velocity: Vector3;
+  /** seconds since it left the gun, at the drawn position */
+  ageS: number;
 }
 
 export interface GameSession {

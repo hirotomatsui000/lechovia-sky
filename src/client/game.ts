@@ -23,7 +23,7 @@ import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
 import { setHudColor, setTeamColors } from './hud/palette.ts';
 import { setStrobes } from './render/environment/night-lights.ts';
-import { releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
+import { bombCue, releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
 import { formatClock, formatTimeOfDay, speedLabel, speedValue } from './hud/format.ts';
 import { sentinelDownText, zoneEventText, zoneFeedText } from './hud/objective-hud.ts';
 import { BINGO_SHARE, spinHint } from './hud/flight-warnings.ts';
@@ -719,7 +719,7 @@ export async function startGame(
       }
       const targets = session.groundTargets();
       const status = session.modeStatus();
-      const bombImpact = local.alive && local.stores.bombs > 0 ? predictImpact(f.pos, f.vel, BOMB_ANVIL, terrain, DT, impactPoint, session.wind) : null;
+      const bombImpact = bombCue(local.alive && local.stores.bombs > 0 ? predictImpact(f.pos, f.vel, BOMB_ANVIL, terrain, DT, impactPoint, session.wind) : null, targets);
       // Not on the take-off run: the gear is down until the jet is well clear of the runway.
       const pullUp = local.alive && f.gear === 0 && timeToImpact(f, terrain) !== null;
       hud.draw({

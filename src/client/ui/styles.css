@@ -486,6 +486,10 @@ input:focus-visible + .option { color: var(--hud); }
 .load-bar > span { position: absolute; inset: 0; background: var(--hud); transform-origin: left; transition: transform 0.2s ease; }
 .load-bar.done { opacity: 0; transition: opacity 0.6s ease 0.3s; }
 
+/* The opening (revision 24): gun-camera footage over the title screen while it loads. */
+.intro { position: absolute; inset: 0; z-index: 30; background: #000; cursor: pointer; touch-action: none; user-select: none; }
+.intro > canvas { display: block; width: 100%; height: 100%; }
+
 /* ---------- Overlays: loading, pause, results, errors ---------- */
 
 .overlay {

@@ -1,4 +1,4 @@
-# Lechovia Skies — Design Spec (revision 23)
+# Lechovia Skies — Design Spec (revision 24)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -79,6 +79,8 @@
   - Revision 23 (2026-10-06): the owner saw the scenery come out in front of the jet now and then. The chase camera
     never looked at the ground: 30 m behind a jet flying low over hills it could sit inside a slope, or behind a ridge
     the jet had just cleared, so the ground covered the jet. It now keeps clear of the ground (§15.1).
+  - Revision 24 (2026-10-06): at the owner's request ("about five seconds of a really cool loading screen before the
+    title screen"), the page opens on five seconds of gun-camera footage while the scenery and jets load (§15.5).
 - **Owner:** Hiroto Matsui
 - **Title:** Lechovia Skies (`lechovia-skies`); the working title until revision 19 was Contested Skies.
 
@@ -1149,6 +1151,22 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 
 ### 15.5 UI and audio
 
+- **Opening (revision 24, `intro-screen.ts`, script in `intro-script.ts`):** the page opens on about five seconds of
+  gun-camera footage, drawn on a 2D canvas, so it needs nothing that is still loading.
+  - Letterbox bars carry the camera's caption and timecode on top, and below them the loading count, a segmented
+    progress bar and "click or press any key to skip". A boot check list types out, and the HUD comes up: pitch
+    ladder, heading tape, speed and altitude.
+  - The sequence, over a dawn horizon: a bandit (a flat-shaded twin-tailed fighter, burners lit, vapour off its wing
+    tips) overtakes from over the camera's shoulder and settles ahead. The seeker hunts and locks (1.6–2.25 s), FOX 2
+    (2.5 s), and the missile hits (3.0 s): a flash, a fireball, a shock ring, sparks and burning pieces, SPLASH ONE.
+    At 3.4 s the title (LECHOVIA over SKIES, as on the title screen) slams in with colour fringes that close up;
+    then the red streamer, a light sweep and the tag line. Grain, scan lines and a vignette throughout.
+  - At 5 s it cuts to the title screen with a white flash and a fade, as soon as everything has loaded; it waits
+    for loading no longer than 9 s, after which the title screen's own load bar carries on. It counts real time,
+    so a slow machine still sees five seconds; a hidden tab pauses it.
+  - The title screen is built underneath from the start, so the cut lands on it ready. A click, a tap or any key
+    skips (0.4 s fade). Keys it takes never reach the title screen: a held Enter or Space does not press FLY.
+  - With reduced motion: no jets, blast, shake or flashes; the sky, the HUD and the title fade in.
 - **Start screen (revision 4):** a minimal title screen over a live 3D scene. The selected jet circles over the
   landscape while the camera orbits it slowly; the scene holds still when the system asks for reduced motion.
   - On screen: the title, the aircraft choice, the opponent's skill, a large FLY button, links to Free Flight and to

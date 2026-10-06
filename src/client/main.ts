@@ -8,6 +8,7 @@ import { QUALITY_PRESETS, resolveQuality } from './render/quality.ts';
 import { Renderer } from './render/renderer.ts';
 import { Showcase } from './render/showcase.ts';
 import { type LoadedMap, loadMap } from './render/terrain/map-loader.ts';
+import { showIntro } from './ui/intro-screen.ts';
 import { showLoadBar } from './ui/load-bar.ts';
 import { type StartOptions, showStartMenu } from './ui/menu.ts';
 import { SettingsStore } from './ui/settings.ts';
@@ -78,6 +79,8 @@ if (Renderer.isWebGLAvailable()) {
   const progress = new LoadProgress();
   showLoadBar(app, progress);
   run(loadSceneryTextures(progress), loadMap('lechovia', progress), loadAircraftMeshes(IMPORTED_MODELS, progress), new SettingsStore(), progress);
+  // The opening plays over the title screen, which is built underneath it meanwhile (revision 24).
+  void showIntro(app, progress, prefersReducedMotion());
 } else {
   showError('WebGL is not available. Use a current desktop Chrome, Edge, Firefox or Safari with hardware acceleration enabled.');
 }

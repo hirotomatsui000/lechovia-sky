@@ -171,7 +171,7 @@ export function openSettings(root: HTMLElement, store: SettingsStore, tab: Setti
           radios('HUD color', HUD_COLORS.map((c) => [c, c[0].toUpperCase() + c.slice(1)] as [HudColor, string]), s.hudColor, (c) => store.update({ hudColor: c })),
           slider('HUD size', HUD_SCALE_RANGE.min, HUD_SCALE_RANGE.max, 0.05, s.hudScale, percent, (v) => store.update({ hudScale: v })),
           radios('Team colours', [['standard', 'Blue / red'], ['colorblind', 'Blue / orange']] as const, s.teamColors, (c) => store.update({ teamColors: c })),
-          checkbox('Reduce motion (camera shake, G blackout, kill cam)', s.reduceMotion, (v) => store.update({ reduceMotion: v })),
+          checkbox('Reduce motion (camera shake, G effect, kill cam)', s.reduceMotion, (v) => store.update({ reduceMotion: v })),
           checkbox('Reduce flashing (steady warnings, no strobe lights)', s.reduceFlashing, (v) => store.update({ reduceFlashing: v })),
         ];
       case 'sound':

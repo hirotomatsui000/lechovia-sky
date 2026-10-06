@@ -7,6 +7,9 @@ describe('death message', () => {
     expect(deathText('boundary', null)).toBe('LEFT THE COMBAT AREA');
     expect(deathText('collision', null)).toBe('MID-AIR COLLISION');
     expect(deathText('crash', null)).toBe('CRASHED');
+    // Blacked out under G (revision 21), whoever gets the credit.
+    expect(deathText('blackout', null)).toBe('BLACKED OUT (G-LOC)');
+    expect(deathText('blackout', 'Grom')).toBe('BLACKED OUT (G-LOC)');
   });
 
   it('counts down the match seconds to the next jet, or says none is left', () => {

@@ -616,10 +616,11 @@ export async function startGame(
       if (!matchOver && session.modeStatus().winner !== null) endMatch();
     }
     if (debug) {
-      const f = session.localView()?.flight;
+      const me = session.localView();
+      const f = me?.flight;
       const lines = f
         ? [
-            `a ${(f.alpha / DEG).toFixed(1)}  n ${f.gLoad.toFixed(1)}  M ${f.mach.toFixed(2)}`,
+            `a ${(f.alpha / DEG).toFixed(1)}  n ${f.gLoad.toFixed(1)}  strain ${(me?.gStrain ?? 0).toFixed(2)}  M ${f.mach.toFixed(2)}`,
             `alt ${f.pos.y.toFixed(0)} m  gear ${f.gear.toFixed(2)}${f.onGround ? '  wheels' : ''}  ${formatTimeOfDay(session.hour())}`,
           ]
         : [];

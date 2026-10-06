@@ -58,6 +58,15 @@ const LEAD_PURSUIT_RANGE_M = 2500;
 const DEFEND_DIVE_ABOVE_M = 1500;
 /** Flares only help near the end, so save them until the missile is this close in time. */
 const FLARES_FROM_S = 3;
+/**
+ * G management (revision 21): past this strain the pilot eases the pull so the G does not black them out, unless
+ * they are breaking from a missile or pulling away from the ground, when only the last stretch before G-LOC stops them.
+ * Chosen with the balance tournament (spec §9.4): easing earlier or later tipped some pairings out of 35–65%.
+ */
+export const STRAIN_EASE_FROM = 0.55;
+export const STRAIN_EASE_FROM_URGENT = 0.9;
+/** The most stick an easing pilot uses: about 5 G, under the tolerance. */
+export const EASED_PULL = 0.5;
 /** A break this long before impact beats the missile's response lag (spec §10.2); slower pilots see it late. */
 const IDEAL_BREAK_S = 2;
 /** Even a badly misjudged missile still looks like it is coming. */
@@ -141,6 +150,8 @@ export class BotPilot {
   private readonly right = new Vector3();
   private readonly upAxis = new Vector3();
   private lastSpawnGen = -1;
+  /** this tick's stick is a missile break or a pull away from the ground (G management, revision 21) */
+  private urgent = false;
   /** a support aircraft the bot wants designated: it presses "next target" next tick */
   private cycleTo: number | null = null;
   private runTargetId: string | null = null;
@@ -165,6 +176,13 @@ export class BotPilot {
   }
 
   think(world: BotWorld, self: AircraftEntity, out: ControlInput): ControlInput {
+    this.urgent = false;
+    this.decide(world, self, out);
+    if (self.gStrain > (this.urgent ? STRAIN_EASE_FROM_URGENT : STRAIN_EASE_FROM)) out.pitch = Math.min(out.pitch, EASED_PULL);
+    return out;
+  }
+
+  private decide(world: BotWorld, self: AircraftEntity, out: ControlInput): void {
     out.airbrake = false;
     out.fireCannon = false;
     out.fireMissile = false;
@@ -197,15 +215,21 @@ export class BotPilot {
     if (!warning) this.impactJudgement.clear();
     out.countermeasures = impactS <= FLARES_FROM_S && this.decideFlares(world, self);
 
-    if (this.avoidGround(world, self.flight, out)) return out;
-    if (this.returnToArea(world, self.flight, out)) return out;
-    if (warning && impactS <= IDEAL_BREAK_S - this.profile.reactionS && this.defend(world, self.flight, warning, out)) return out;
+    if (this.avoidGround(world, self.flight, out)) {
+      this.urgent = true;
+      return;
+    }
+    if (this.returnToArea(world, self.flight, out)) return;
+    if (warning && impactS <= IDEAL_BREAK_S - this.profile.reactionS && this.defend(world, self.flight, warning, out)) {
+      this.urgent = true;
+      return;
+    }
     if (hasStandingTarget(world)) {
       if (self.bombLoad > 0) {
-        if (this.attack(world, self, reactionTicks, out)) return out;
+        if (this.attack(world, self, reactionTicks, out)) return;
       } else {
         this.defendTargets(world, self, reactionTicks, out);
-        return out;
+        return;
       }
     }
     const goal = world.botGoal?.(self) ?? null;
@@ -213,12 +237,11 @@ export class BotPilot {
       const target = this.goalTarget(world, self, goal, reactionTicks);
       if (target) this.engage(world, self, target, out);
       else this.holdGoal(self, goal, out);
-      return out;
+      return;
     }
     const target = this.perceiveTarget(world, self, reactionTicks);
     if (target) this.engage(world, self, target, out);
     else this.patrol(world, self, reactionTicks, out);
-    return out;
   }
 
   /**

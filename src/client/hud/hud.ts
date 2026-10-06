@@ -1,5 +1,6 @@
 import { Vector3 } from 'three';
 import { clamp, DEG, RAD } from '../../shared/math/units.ts';
+import { visionLoss } from '../../shared/physics/g-tolerance.ts';
 import { WARNING_CAPTIONS } from './captions.ts';
 import { drawCombatLayer } from './combat-layer.ts';
 import {
@@ -14,6 +15,7 @@ import {
   verticalSpeedValue,
 } from './format.ts';
 import { drawGameLayer } from './game-layer.ts';
+import { createGVision, gVision } from './g-vision.ts';
 import { BINGO_SHARE, formatFuel, formatWind } from './flight-warnings.ts';
 import { drawDatalink, drawObjective, drawZones } from './objective-layer.ts';
 import type { HudFrame } from './hud-frame.ts';
@@ -38,12 +40,12 @@ export class Hud {
   private height = 0;
   private scale = 1;
   private maxG = 1;
-  private gOverTime = 0;
   private clock = 0;
   /** steady warnings instead of blinking ones (M5) */
   reduceFlashing = false;
-  /** softer G blackout and red-out (M5) */
+  /** a softer G effect before a blackout, and red-out (M5; the blackout itself stays black) */
   reduceMotion = false;
+  private readonly vision = createGVision();
   private readonly dir = new Vector3();
   private readonly onResize = () => this.resize();
 
@@ -86,12 +88,9 @@ export class Hud {
     this.clock += f.dt;
     // With reduced flashing every blink holds its "on" phase.
     const blink = this.reduceFlashing ? 0.05 : this.clock;
-    const flight = f.view.flight;
-    if (f.view.alive) {
-      this.maxG = Math.max(this.maxG, flight.gLoad);
-      this.gOverTime = flight.gLoad > 7 ? this.gOverTime + f.dt : Math.max(0, this.gOverTime - 2 * f.dt);
-      this.drawGEffects(flight.gLoad);
-    }
+    if (f.view.alive) this.maxG = Math.max(this.maxG, f.view.flight.gLoad);
+    // A blacked-out pilot sees none of the HUD (revision 21).
+    const conscious = f.view.blackedOutS === null;
     ctx.save();
     ctx.font = FONT;
     ctx.fillStyle = PRIMARY;
@@ -99,7 +98,7 @@ export class Hud {
     ctx.lineWidth = 1.6;
     ctx.shadowColor = SHADOW;
     ctx.shadowBlur = 3;
-    if (f.view.alive) {
+    if (f.view.alive && conscious) {
       this.drawBoresight(f);
       this.drawFlightPathMarker(f);
       this.drawAimReticle(f);
@@ -121,6 +120,8 @@ export class Hud {
     if (f.status.zones) drawZones(ctx, this.projector, f, f.status.zones, this.width);
     if (f.status.objective) drawObjective(ctx, this.projector, f, f.status.objective);
     if (f.training) drawTrainingLayer(ctx, this.projector, f, f.training, this.width);
+    // The G takes the view over the scene and everything above, but the messages stay readable.
+    if (f.view.alive) this.drawGEffects(f);
     this.drawModeAndHint(f);
     if (f.banner) this.drawCenterText(f.banner, this.height * 0.3, AMBER, FONT_BIG);
     if (f.message) this.drawCenterText(f.message, this.height * 0.38, WHITE, FONT_BIG);
@@ -225,7 +226,12 @@ export class Hud {
     this.drawValueBox(x, y, String(Math.round(speedValue(flight.airspeed, units))), speedLabel(units));
     const ctx = this.ctx;
     ctx.fillText(formatMach(flight.mach), x, y + 44);
+    // The G readout warns as the strain starts to take the view (revision 21).
+    const loss = visionLoss(f.view.gStrain);
+    ctx.save();
+    if (loss > 0) ctx.fillStyle = loss > 0.5 ? RED : AMBER;
     ctx.fillText(`G ${flight.gLoad.toFixed(1)}  ${this.maxG.toFixed(1)}`, x, y + 64);
+    ctx.restore();
     ctx.fillText(`α ${(flight.alpha * RAD).toFixed(1)}`, x, y + 84);
     // Ground speed differs from airspeed by the wind (revision 16).
     ctx.fillText(`GS ${Math.round(speedValue(flight.vel.length(), units))}`, x, y + 104);
@@ -342,21 +348,40 @@ export class Hud {
     ctx.restore();
   }
 
-  private drawGEffects(g: number): void {
+  /** The G on the view (revision 21): red, darkening from the edges, black at G-LOC; and red-out under negative G. */
+  private drawGEffects(f: HudFrame): void {
+    const v = gVision(f.view.gStrain, f.view.blackedOutS, this.reduceMotion, this.vision);
     const ctx = this.ctx;
-    const soften = this.reduceMotion ? 0.35 : 1;
-    const black = clamp((this.gOverTime - 2) / 2, 0, 0.85) * soften;
-    if (black > 0) {
-      const r = Math.min(this.width, this.height);
-      const grad = ctx.createRadialGradient(this.width / 2, this.height / 2, r * 0.15, this.width / 2, this.height / 2, r * 0.75);
-      grad.addColorStop(0, 'rgba(0,0,0,0)');
-      grad.addColorStop(1, `rgba(0,0,0,${black})`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, this.width, this.height);
+    const w = this.width;
+    const h = this.height;
+    ctx.save();
+    ctx.shadowBlur = 0;
+    if (v.red > 0) {
+      ctx.fillStyle = `rgba(150, 0, 0, ${v.red})`;
+      ctx.fillRect(0, 0, w, h);
     }
+    if (v.edge > 0) {
+      const r = Math.hypot(w, h) / 2;
+      const inner = 0.9 * r * v.clear;
+      const grad = ctx.createRadialGradient(w / 2, h / 2, inner, w / 2, h / 2, inner + 0.6 * r);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, `rgba(0,0,0,${v.edge})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
+    if (v.black > 0) {
+      ctx.fillStyle = `rgba(0,0,0,${v.black})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+    const g = f.view.flight.gLoad;
     if (g < -2.5) {
-      ctx.fillStyle = `rgba(160, 0, 0, ${clamp((-2.5 - g) / 1.5, 0, 0.5) * soften})`;
-      ctx.fillRect(0, 0, this.width, this.height);
+      ctx.fillStyle = `rgba(160, 0, 0, ${clamp((-2.5 - g) / 1.5, 0, 0.5) * (this.reduceMotion ? 0.35 : 1)})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+    ctx.restore();
+    if (f.view.blackedOutS !== null) {
+      this.drawCenterText('G-LOC', h * 0.42, RED, FONT_BIG);
+      this.drawCenterText('BLACKED OUT · NO CONTROL', h * 0.42 + 30, WHITE, FONT);
     }
   }
 }

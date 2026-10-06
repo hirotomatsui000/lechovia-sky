@@ -12,9 +12,10 @@ export interface KillFeedLine {
 export const KILL_FEED_LIFETIME_S = 6;
 export const KILL_FEED_MAX_LINES = 5;
 
-const WEAPON_TEXT: Partial<Record<DeathCause, string>> = { cannon: 'gun', missile: 'missile', crash: 'forced a crash' };
+const WEAPON_TEXT: Partial<Record<DeathCause, string>> = { cannon: 'gun', missile: 'missile', crash: 'forced a crash', blackout: 'forced a G-LOC' };
 const SOLO_TEXT: Record<DeathCause, string> = {
   crash: 'crashed',
+  blackout: 'blacked out and crashed',
   collision: 'collided',
   boundary: 'left the combat area',
   cannon: 'was shot down',

@@ -11,6 +11,10 @@ is rebuilt after every push ([Publish as a website](#publish-as-a-website)). The
 **Current milestone: M5 "Modes & polish"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
 "Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02: the game is
 single player against AI pilots and runs entirely in the browser.
+- **G blackout** (2026-10-06): pulling harder than 7 G strains you. Hold it and the view turns red and darkens from
+  the edges in (the G readout turns amber, then red); at its darkest you black out (G-LOC): the stick no longer
+  answers, and the jet spirals into the ground. Full stick in a fast turn takes the view after about 4 s and blacks
+  you out after about 12; ease off and it clears in a few seconds. The AI pilots feel the G too and ease off in time.
 - **Easier to hit** (2026-10-03): your missiles lock sooner, are fooled by flares and chaff far less often, turn
   harder and burst wider, and your cannon rounds hit within three times the old distance. Guns have an aim assist: with the aim point
   (the circle in front of the target) within about 10° of your nose, the rounds go to it; a ring closes on the
@@ -70,7 +74,7 @@ single player against AI pilots and runs entirely in the browser.
   counted, and clearing the site's data erases the records.
 - **End-of-match summary**: damage per pilot, how the zones or Sentinels ended up, and your own flight (kills,
   missiles fired and hit, gun hits, damage, top speed, max G, time in the air).
-- **Accessibility**: reduce motion (also softens the G blackout and holds the kill cam still), reduce flashing (steady
+- **Accessibility**: reduce motion (also softens the G effect before a blackout and holds the kill cam still), reduce flashing (steady
   warnings, no strobes) and a colour-blind safe team colour pair, besides the HUD colour and size.
 
 Earlier milestones:

@@ -16,6 +16,7 @@ import { trimAlpha } from '../physics/aero.ts';
 import { atmosphere } from '../physics/atmosphere.ts';
 import { type ControlInput, neutralInput, sanitizeInput } from '../physics/controls.ts';
 import { createFlightState, type FlightEnv, type FlightState, stepFlight } from '../physics/flight-model.ts';
+import { slumpedInput, updateStrain } from '../physics/g-tolerance.ts';
 import { WindField } from '../physics/wind.ts';
 import type { Projectile } from '../weapons/cannon.ts';
 import type { Bomb } from '../weapons/bomb.ts';
@@ -347,6 +348,8 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       const raw = bot ? bot.pilot.think(this, a, bot.input) : inputs.get(a.id);
       if (raw) sanitizeInput(raw, a.input);
       if (bot) airmanship(a);
+      // A blacked-out pilot's hands are slumped on the stick, whatever they or their AI would do (revision 21).
+      if (a.blackoutTick >= 0) slumpedInput(a.input, a.flight.quat);
     }
     const timeS = this.tick * DT;
     for (const a of this.aircraft.values()) {
@@ -362,6 +365,13 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       stepFlight(a.flight, a.input, a.config.physics, DT, env);
       a.stores.fuelKg = Math.max(0, a.stores.fuelKg - a.flight.fuelFlow * DT);
       a.history.record(a.flight.pos, a.flight.vel);
+      if (a.blackoutTick < 0) {
+        a.gStrain = updateStrain(a.gStrain, a.flight.gLoad, DT);
+        if (a.gStrain >= 1) {
+          a.blackoutTick = this.tick;
+          this.emit({ type: 'blackout', aircraftId: a.id });
+        }
+      }
     }
     if (this.mode.combatEnabled) this.combat.step(DT);
     this.checkCollisions();
@@ -372,7 +382,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       const crashed = a.flight.onGround ? Number.isNaN(airfieldGroundHeight(this.map.features, p.x, p.z)) : p.y < this.terrain.surfaceAt(p.x, p.z) + GROUND_CLEARANCE_M;
       if (crashed) {
         const credited = maneuverKillCredit(a, this.tick, TICK_RATE);
-        this.destroy(a, 'crash', credited === null ? null : (this.aircraft.get(credited) ?? null));
+        this.destroy(a, a.blackoutTick >= 0 ? 'blackout' : 'crash', credited === null ? null : (this.aircraft.get(credited) ?? null));
         continue;
       }
       if (this.isOutOfBounds(a)) {
@@ -436,6 +446,11 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     if (a.alive || a.respawnAtTick < 0) return null;
     if (a.support === null && !this.mode.canRespawn(a.team)) return null;
     return Math.max(0, (a.respawnAtTick - this.tick) / TICK_RATE);
+  }
+
+  /** Seconds since the pilot blacked out (G-LOC, revision 21); null while conscious or shot down. */
+  blackedOutS(a: AircraftEntity): number | null {
+    return a.alive && a.blackoutTick >= 0 ? (this.tick - a.blackoutTick) / TICK_RATE : null;
   }
 
   /** Seconds until a boundary kill, or null when the aircraft is not currently counting down. */

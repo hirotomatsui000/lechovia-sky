@@ -1,12 +1,15 @@
 import type { TeamId } from '../data/aircraft/types.ts';
 import type { MissileKind } from '../data/weapons.ts';
 
-export type DeathCause = 'crash' | 'collision' | 'boundary' | 'cannon' | 'missile';
+/** 'blackout': the jet hit the ground with its pilot blacked out by G (G-LOC, revision 21). */
+export type DeathCause = 'crash' | 'blackout' | 'collision' | 'boundary' | 'cannon' | 'missile';
 export type WeaponKind = 'cannon' | 'missile';
 
 export type GameEvent =
   | { type: 'spawned'; aircraftId: number; spawnGen: number }
   | { type: 'destroyed'; aircraftId: number; cause: DeathCause; killerId: number | null }
+  /** the pilot blacked out under G (G-LOC, revision 21): the stick no longer answers */
+  | { type: 'blackout'; aircraftId: number }
   | { type: 'hit'; aircraftId: number; attackerId: number | null; weapon: WeaponKind; damage: number }
   | { type: 'missileLaunched'; missileId: number; shooterId: number; targetId: number; kind: MissileKind }
   | { type: 'missileDetonated'; missileId: number; x: number; y: number; z: number; nearAircraft: boolean }

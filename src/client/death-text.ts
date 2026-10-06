@@ -2,6 +2,8 @@ import type { DeathCause } from '../shared/world/events.ts';
 
 /** The headline when the local pilot goes down. */
 export function deathText(cause: DeathCause, killer: string | null): string {
+  // Blacked out under G (revision 21): the kill feed says who forced it.
+  if (cause === 'blackout') return 'BLACKED OUT (G-LOC)';
   if (killer) return `SHOT DOWN BY ${killer}`;
   if (cause === 'boundary') return 'LEFT THE COMBAT AREA';
   if (cause === 'collision') return 'MID-AIR COLLISION';

@@ -77,6 +77,10 @@ export interface AircraftEntity extends CreditRecord {
   readonly datalink: number[];
   /** the jet this pilot flies after the next respawn, when they chose another (M5) */
   nextAircraftId: string | null;
+  /** the pilot's G strain, 0 clear … 1 blacked out (revision 21) */
+  gStrain: number;
+  /** tick at which the pilot blacked out (G-LOC), -1 while conscious */
+  blackoutTick: number;
 }
 
 export interface NewAircraft {
@@ -135,15 +139,19 @@ export function createAircraftEntity(n: NewAircraft): AircraftEntity {
     support: n.support ?? null,
     datalink: [],
     nextAircraftId: null,
+    gStrain: 0,
+    blackoutTick: -1,
   };
   resetForSpawn(entity);
   return entity;
 }
 
-/** Full hit points, stores and tanks, cleared targeting and credit: the state of a freshly spawned aircraft. */
+/** Full hit points, stores and tanks, a clear-headed pilot, cleared targeting and credit: a freshly spawned aircraft. */
 export function resetForSpawn(a: AircraftEntity): void {
   const s = a.config.stores;
   a.hp = a.config.damage.hitPoints;
+  a.gStrain = 0;
+  a.blackoutTick = -1;
   a.stores.cannonRounds = s.cannonRounds;
   a.stores.srm = s.srm;
   a.stores.mrm = a.lanceLoad ?? s.mrm;

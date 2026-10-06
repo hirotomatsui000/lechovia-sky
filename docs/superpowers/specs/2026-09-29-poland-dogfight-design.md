@@ -1,4 +1,4 @@
-# Lechovia Skies — Design Spec (revision 20)
+# Lechovia Skies — Design Spec (revision 21)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -63,6 +63,12 @@
     break off near a Sentinel; every fighter carries 4 Lances; the USA's Sentinels get 50 HP per Russian fighter.
   - Revision 20 (2026-10-03): the owner found hitting far too hard, missiles above all. The player's weapons now hit
     more easily than the AI pilots' (§10.5); the AI pilots, wingmen included, keep the plain weapons.
+  - Revision 21 (2026-10-06): at the owner's request G has consequences: "G builds → the view goes red and darker →
+    at its darkest the pilot blacks out → the stick stops answering and the jet crashes". Pulling harder than 7 G
+    strains the pilot (§8); the view turns red and closes in (§15.2); at full strain the pilot blacks out (G-LOC) and
+    the jet spirals into the ground, a death of its own (§11). AI pilots ease off before it (§14), and the balance
+    tournament still passes (§9.4). The bare address lechovia-skies.github.io, and links cut short, now lead to the
+    game (§24).
 - **Owner:** Hiroto Matsui
 - **Title:** Lechovia Skies (`lechovia-skies`); the working title until revision 19 was Contested Skies.
 
@@ -381,6 +387,14 @@ State: `{pos, vel, quat, angVel, throttle, airbrake}`, plus derived `alpha, beta
   pro-spin rudder undo it at 0.5/s. On recovery the body rates drop to 30% and for 3 s the AoA limit is `α_max − 2°`
   with no instability, so the jet dives out instead of spinning again. Hard-limited jets (limiter ≤ α_max + 1°) and
   thrust-vectoring jets with thrust barely depart; with the throttle closed thrust vectoring cannot help.
+- **Pilot G tolerance (revision 21, `physics/g-tolerance.ts`):** each pilot has a strain from 0 (clear) to 1. Above
+  7 G (what a pilot in a G-suit, straining against it, holds for as long as they like) it builds at
+  `((n − 7)/2)^1.5 / 10` per second, so 9 G held without a break blacks a clear-headed pilot out in 10 s and 8 G in
+  28 s; at or below 7 G it drains at `0.25·clamp((7 − n)/6, 0.2, 1.5)` per second (1 s at 1 G sheds a quarter). From
+  0.3 the view goes (§15.2). At 1 the pilot blacks out (G-LOC) for good: the World replaces their input with a slumped
+  stick (pull 0.3, rolled toward the low wing to 150° of bank, no buttons, the throttle kept), which takes the jet down
+  in a steepening spiral, about 15 s from 3 km and at most 28 s from 8 km. A full-stick turn from 300 m/s starts to
+  take the view after about 4 s and blacks the pilot out after 11–13 s. A new jet comes with a clear-headed pilot.
 - **Not modeled:** landing gear damage; missiles ignore the wind; cannon shells keep the shooter's velocity, so the
   wind does not move them relative to the target.
 
@@ -465,6 +479,11 @@ M 1.9–2.3 at 11 km and M 1.1–1.4 at sea level; instantaneous turn 20–27 °
   Kestrel 0.6, Condor 0.5, Prizrak 0.85, Yastreb 0.85, Sapsan 0.4, Kobchik 0.55 (Sentinel 0.3). Internal fuel (kg):
   Shade 7,500, Tempest 7,800, Kestrel 3,200, Condor 6,000, Prizrak 8,500, Yastreb 8,000, Sapsan 8,500, Kobchik 3,500
   (Sentinel 20,000).
+- Revision 21 (G tolerance, §8): the AI pilots' G management (§14) shifts the fights, as nobody holds 9 G any more.
+  Easing at strain 0.6 with a 6 G tolerance put 4 pairings outside, smoother easing 12–13; the tolerance went to 7 G
+  and easing to 0.55, and every pairing is within 35–65% over seeds 1–100 again (1,021 draws). Over seeds 1001–1300
+  five pairings fall outside (Kestrel and Condor against the Prizrak and Yastreb, Tempest–Yastreb), against four
+  before revision 21 on the same seeds: those pairings were already weak, and stay for a later balance pass.
 
 ## 10. Weapons, targeting and countermeasures (abstracted)
 
@@ -626,6 +645,9 @@ Aces stay hard: they release the most flares and break best. A first try with st
 - **Other deaths:**
   - Mid-air collision (centers closer than `0.5·(r₁ + r₂)`) destroys both aircraft.
   - Leaving the combat area, or climbing above 18 km, for 15 s continuous → destroyed.
+  - Blacking out under G (§8, revision 21): the jet flies on with the slumped stick until it hits the ground. The
+    death is a `blackout` (`BLACKED OUT (G-LOC)`; kill feed "blacked out and crashed"), credited like a crash: within
+    15 s of an enemy's damage or lock that enemy gets the kill ("forced a G-LOC").
 - **Respawn:** after 5 s, per the mode's spawn rules, with full stores.
 - **Ground targets (Strike, M1d):** each has 100 hit points and takes damage only from bombs (§10.4). It shows smoke
   below 50% and becomes a burning wreck at 0, when it counts as destroyed. Targets are not repaired.
@@ -886,6 +908,11 @@ stands still. Mission 1 is always open; clearing (winning) a mission opens the n
      - Lead pursuit with the cannon inside gun range, firing when the aim error is under the threshold.
   5. **Patrol:** fly toward the nearest enemy or the area center.
   6. **Energy:** afterburner in combat; ease the pull below corner speed.
+  7. **G management (revision 21):** whatever the behavior, past a G strain of 0.55 the bot pulls at most half stick
+     (about 5 G), and when it is breaking from a missile or pulling away from the ground, only past 0.9. AI pilots
+     never black out in testing (three 2-minute Ace duels in `blackout.test.ts`; 60 3-minute 1 v 1 matches across the
+     skills). Rookies barely feel the G (their 70% pull is about 6.6 G, under the tolerance); Veterans fly with some
+     of the view gone 6% of the time, Aces 40%.
 - **Difficulty profiles:**
 
 | | Rookie | Veteran | Ace |
@@ -974,8 +1001,14 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
     the owner took it for a broken aiming line.)
   - **Defender:** banners `TARGET B UNDER ATTACK` (when a target is hit, at most once per 3 s per target) and
     `TARGET B DESTROYED`; the kill feed also records destroyed targets.
-- **G effects:** blackout vignette when > 7 G is sustained for more than 2 s; red tint below −2.5 G (a third as strong
-  with reduce motion, M5).
+- **G effects:** red tint below −2.5 G (a third as strong with reduce motion, M5). Revision 21 (`hud/g-vision.ts`), from
+  the pilot's G strain (§8): past 0.3 the view turns red (full by halfway to G-LOC), darkness closes in from the
+  edges until the middle goes too, and the last quarter goes black; the G readout turns amber, then red past halfway.
+  The effect covers the scene and the HUD, but not the messages, banners or the hint line. Blacked out (G-LOC), the
+  HUD is gone, the screen holds black for 2 s with `G-LOC` and `BLACKED OUT · NO CONTROL`, then over 1.5 s the
+  falling jet shows through, 60% dark and red. Reduce motion keeps the effect to 60% before the blackout (the
+  blackout itself stays black). Cockpit warnings (PULL UP, stall) keep sounding. Replaces M1's blackout vignette
+  (more than 7 G held for 2 s), which did nothing to the jet.
 - **M5:** the zone strip and markers (§13.3), Sentinel markers and the datalink state (§13.4), hollow datalink
   contacts; the respawn screen names the killer (jet and hit points left), who you watch, and the next jet.
 - **Revision 16:** `GS` (ground speed) under the AoA; `WIND 262° 37 KT` (bearing it blows from, speed in the jet's
@@ -1297,7 +1330,7 @@ its milestone.
 | Hardware range | Low/Medium/High graphics presets (pixel ratio, texture size, draw distance, effects), chosen automatically from the measured frame rate and changeable in settings | M1c |
 | Loading | A loading progress bar. Once assets pass about 5 MB, publish the multi-file build (`dist/`) instead of one HTML file so browsers cache and load pieces in parallel | M1c (progress), M2 (multi-file) |
 | Sharing | A title screen with a Play button over a live 3D background (M1b); page title, description, social-preview image and icon (M1c) | M1b, M1c |
-| Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle. (Revision 13: Netlify is linked to the repository and builds the multi-file site on every push that changes the page, per `netlify.toml`; the one-file build remains for hand deploys.) (Revision 14: no server; GitHub Pages serves the multi-file site from the `gh-pages` branch, which `.github/workflows/publish.yml` rebuilds after the tests pass on every push to `main` or a `claude/…` branch, at https://hirotomatsui000.github.io/dogfight/; revision 19: https://lechovia-skies.github.io/._./, the repository `lechovia-skies/._.`; the workflow builds for the root of the address when a repository is named `<owner>.github.io`) | M2 |
+| Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle. (Revision 13: Netlify is linked to the repository and builds the multi-file site on every push that changes the page, per `netlify.toml`; the one-file build remains for hand deploys.) (Revision 14: no server; GitHub Pages serves the multi-file site from the `gh-pages` branch, which `.github/workflows/publish.yml` rebuilds after the tests pass on every push to `main` or a `claude/…` branch, at https://hirotomatsui000.github.io/dogfight/; revision 19: https://lechovia-skies.github.io/._./, the repository `lechovia-skies/._.`; the workflow builds for the root of the address when a repository is named `<owner>.github.io`) (Revision 21: the organization's own site, the repository `lechovia-skies/lechovia-skies.github.io`, sends the bare address and every address with nothing behind it to `/._./`: chat apps drop the last `.` of a link sent without its final `/` and open `/._`, which showed GitHub's 404 page to other players.) | M2 |
 | Joining | An invite link per room, and "Quick play" that joins the busiest room. Bots fill empty seats so one human plus bots is a full match. (Removed in revision 14) | M2 |
 | Safety | Server authority for all hits (§7); callsign filter; preset quick-chat messages only; rate limits; a short privacy note (no accounts, no tracking) | M2 |
 | Updates | A page/server version check that asks players to reload; browser error reporting; a server health check; one automated browser smoke test (load the site, fly 10 s) before each deploy. (Revision 14: all removed with the server; the publish workflow runs the unit tests before each deploy) | M2 |

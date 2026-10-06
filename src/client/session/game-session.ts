@@ -37,6 +37,10 @@ export interface AircraftView {
   boundarySecondsLeft: number | null;
   /** match seconds until a shot-down aircraft flies again; null while alive or with no aircraft left */
   respawnInS: number | null;
+  /** the pilot's G strain, 0 clear … 1 blacked out (revision 21) */
+  gStrain: number;
+  /** match seconds since the pilot blacked out (G-LOC); null while conscious */
+  blackedOutS: number | null;
   kills: number;
   deaths: number;
   firingCannon: boolean;

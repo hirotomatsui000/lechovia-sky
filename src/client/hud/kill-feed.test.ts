@@ -7,6 +7,8 @@ describe('kill feed', () => {
     expect(describeDeath('[BOT] Grom', 'Pilot', 'cannon')).toBe('Pilot → [BOT] Grom · gun');
     expect(describeDeath('Pilot', '[BOT] Grom', 'crash')).toBe('[BOT] Grom → Pilot · forced a crash');
     expect(describeDeath('Pilot', null, 'crash')).toBe('Pilot crashed');
+    expect(describeDeath('Pilot', null, 'blackout')).toBe('Pilot blacked out and crashed');
+    expect(describeDeath('Pilot', '[BOT] Grom', 'blackout')).toBe('[BOT] Grom → Pilot · forced a G-LOC');
     expect(describeDeath('Pilot', null, 'boundary')).toBe('Pilot left the combat area');
   });
 

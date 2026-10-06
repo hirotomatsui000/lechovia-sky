@@ -126,8 +126,9 @@ export class Effects {
       const v = session.view(e.aircraftId);
       if (v) {
         this.explosion(v.position, v.flight.vel, 1);
-        // Shot down, collided or lost in the air: the burning airframe falls (M5). A crash ends on the ground.
-        if (e.cause !== 'crash') this.spawnWreck(e.aircraftId, v);
+        // Shot down, collided or lost in the air: the burning airframe falls (M5). A crash ends on the ground, with or
+        // without a blacked-out pilot (revision 21).
+        if (e.cause !== 'crash' && e.cause !== 'blackout') this.spawnWreck(e.aircraftId, v);
       }
     } else if (e.type === 'missileDetonated') {
       this.explosion(this.tmp.set(e.x, e.y, e.z), this.zero, e.nearAircraft ? 0.6 : 0.45);

@@ -39,7 +39,7 @@ export interface Settings {
   graphics: GraphicsSetting;
   /** the level Auto settled on, remembered for the next visit */
   autoGraphics: QualityLevel | null;
-  /** camera shake, the G blackout and red-out, and the kill cam's camera move (M5) */
+  /** camera shake, the G effect before a blackout and the red-out, and the kill cam's camera move (M5) */
   reduceMotion: boolean;
   /** steady HUD warnings and no strobe lights (M5) */
   reduceFlashing: boolean;

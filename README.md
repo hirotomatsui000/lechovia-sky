@@ -250,6 +250,12 @@ and replaces the `gh-pages` branch with it, which GitHub Pages serves: the page 
 push. The latest push wins, whichever of those branches it went to. When the tests fail nothing is published; the run
 on the repository's **Actions** tab says why.
 
+Every other address on `lechovia-skies.github.io` leads to the game too: the organization's own site, the repository
+[`lechovia-skies/lechovia-skies.github.io`](https://github.com/lechovia-skies/lechovia-skies.github.io), sends the bare
+address and anything with nothing behind it (its `404.html`) on to `/._./`. Chat apps drop the last `.` of a link sent
+without its final `/` and open `/._`, which used to show GitHub's 404 page; the old `/lechovia-sky/` lands there too.
+The first address, `hirotomatsui000.github.io/dogfight/`, is not redirected.
+
 To switch it on (once): on GitHub open the repository's **Settings** → **Pages**, and under **Build and deployment**
 choose Source **Deploy from a branch**, branch **gh-pages**, folder **/ (root)**, then **Save**. The `gh-pages` branch
 appears after the workflow's first run.

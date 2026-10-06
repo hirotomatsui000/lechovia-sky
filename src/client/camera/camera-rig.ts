@@ -22,6 +22,28 @@ const SHAKE_MAX_ANGLE = 1.2 * DEG;
 const SHAKE_MAX_ROLL = 1.5 * DEG;
 /** The kill cam eases onto its shot with this time constant. */
 const FRAME_TAU_S = 0.35;
+/**
+ * The ground never comes between the camera and what it looks at (revision 23): the camera stays this high above the
+ * ground, the line to its subject this high above it at every sample, and it settles back down this gently. It rises
+ * at once, by at most this much.
+ */
+const GROUND_CLEARANCE_M = 3;
+const LINE_CLEARANCE_M = 2;
+const LINE_SAMPLES = 8;
+const SETTLE_TAU_S = 0.4;
+const MAX_LIFT_M = 300;
+
+/** How far to raise a camera at `cam` so it clears the ground and the ground does not hide `subject`; 0 when clear. */
+export function clearanceLift(cam: Vector3, subject: Vector3, ground: (x: number, z: number) => number): number {
+  let lift = ground(cam.x, cam.z) + GROUND_CLEARANCE_M - cam.y;
+  for (let i = 1; i < LINE_SAMPLES; i++) {
+    const t = i / LINE_SAMPLES;
+    const need = ground(cam.x + (subject.x - cam.x) * t, cam.z + (subject.z - cam.z) * t) + LINE_CLEARANCE_M - (cam.y + (subject.y - cam.y) * t);
+    // Raising the camera by L raises the line here by L·(1 − t).
+    if (need > 0) lift = Math.max(lift, need / (1 - t));
+  }
+  return clamp(lift, 0, MAX_LIFT_M);
+}
 
 /** Continuous shake sources: high G, the transonic buffet band and afterburner rumble. */
 export function sustainedTrauma(gLoad: number, mach: number, throttle: number): number {
@@ -40,6 +62,9 @@ const WORLD_UP = new Vector3(0, 1, 0);
 /** The game's only camera: third person, behind and above the jet (spec §15.1). */
 export class CameraRig {
   reduceMotion = false;
+  /** the ground's height, so the camera stays out of it (revision 23); null where there is no terrain */
+  ground: ((x: number, z: number) => number) | null = null;
+  private lift = 0;
   private readonly camera: PerspectiveCamera;
   private trauma = 0;
   private time = 0;
@@ -91,6 +116,7 @@ export class CameraRig {
       this.offset.z = approach(this.offset.z, desired.z, dt, CHASE_TAU);
     }
     this.camera.position.copy(target.position).add(this.offset);
+    this.keepClear(target.position, dt);
     const lookAt = this.tmpB.copy(target.position).addScaledVector(dir, CHASE_LOOK_AHEAD);
     this.tmpM.lookAt(this.camera.position, lookAt, up);
     this.camera.quaternion.setFromRotationMatrix(this.tmpM);
@@ -111,6 +137,7 @@ export class CameraRig {
     const cam = this.camera;
     const k = dt > 0 ? 1 - Math.exp(-dt / FRAME_TAU_S) : 1;
     cam.position.lerp(position, this.framing ? k : 1);
+    this.keepClear(lookAt, dt);
     this.tmpM.lookAt(cam.position, lookAt, WORLD_UP);
     this.tmpQ.setFromRotationMatrix(this.tmpM);
     if (this.framing) cam.quaternion.slerp(this.tmpQ, k);
@@ -122,6 +149,19 @@ export class CameraRig {
     }
     this.framing = true;
     this.offsetReady = false;
+  }
+
+  /**
+   * Raises the camera out of the ground and over any ground between it and `subject` (revision 23): flying low over
+   * hills, the chase camera 30 m behind could sit in a slope, or behind a ridge the jet had just cleared, and the
+   * scenery covered the jet. It rises at once and settles back gently.
+   */
+  private keepClear(subject: Vector3, dt: number): void {
+    if (!this.ground) return;
+    const cam = this.camera.position;
+    const need = clearanceLift(cam, subject, this.ground);
+    this.lift = Math.max(need, dt > 0 ? approach(this.lift, need, dt, SETTLE_TAU_S) : need);
+    cam.y += this.lift;
   }
 
   private applyShake(): void {

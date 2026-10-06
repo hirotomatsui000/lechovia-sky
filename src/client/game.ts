@@ -219,6 +219,8 @@ export async function startGame(
   const impactPoint = new Vector3();
   const effects = new Effects(renderer.scene, { terrain, wreckModel: (id) => sceneSync.modelFor(id)?.root ?? null });
   const cameraRig = new CameraRig(renderer.camera);
+  // The ground never comes between the camera and the jet (revision 23).
+  cameraRig.ground = (x, z) => terrain.surfaceAt(x, z);
   const hud = new Hud(root);
   const input = new DomInput(renderer.webgl.domElement);
   input.attach();

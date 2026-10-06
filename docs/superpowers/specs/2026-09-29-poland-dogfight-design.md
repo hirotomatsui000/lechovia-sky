@@ -1,4 +1,4 @@
-# Lechovia Skies — Design Spec (revision 22)
+# Lechovia Skies — Design Spec (revision 23)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -76,6 +76,9 @@
     reported the map screen "out of place"; nothing was off in a match, but Free Flight pulled a click near the edge
     of the map back into the combat area, so you flew from somewhere else: Free Flight now opens the whole map
     (§13.5).
+  - Revision 23 (2026-10-06): the owner saw the scenery come out in front of the jet now and then. The chase camera
+    never looked at the ground: 30 m behind a jet flying low over hills it could sit inside a slope, or behind a ridge
+    the jet had just cleared, so the ground covered the jet. It now keeps clear of the ground (§15.1).
 - **Owner:** Hiroto Matsui
 - **Title:** Lechovia Skies (`lechovia-skies`); the working title until revision 19 was Contested Skies.
 
@@ -1001,6 +1004,10 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 - **Chase camera:** behind and above the jet (30 m back, 7 m up, 70° field of view) with a smoothed follow. In
   mouse-aim mode it follows the aim direction and keeps the horizon level; in keyboard mode it rolls with the jet.
   After a respawn it starts behind the new position instead of sweeping across the map.
+- **Clear of the ground (revision 23, `clearanceLift`):** the chase and kill cameras stay 3 m above the ground, and
+  the line to the jet (or the kill cam's subject) 2 m above it at eight samples; when the ground is in the way the
+  camera rises at once (at most 300 m) and settles back over 0.4 s once clear. Before, flying low over hills the
+  camera could sit in a slope behind the jet or behind a ridge it had just cleared, and the scenery covered the jet.
 - **Look around:** holding C or the right mouse button swings the camera around the jet; releasing it swings back.
   The look direction also aims the helmet sight.
 - **Shake:** trauma-based noise from G > 6, the transonic buffet band, afterburner, cannon fire, hits and nearby

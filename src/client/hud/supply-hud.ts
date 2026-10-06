@@ -63,14 +63,10 @@ export function supplyLimits(units: UnitSystem): { speed: string; height: string
   };
 }
 
-/**
- * The hint line on the roll-out after a landing: throttle to idle (above about half throttle the engines outpull the
- * brakes) and brake to a stop on the runway to be repaired.
- */
+/** The hint line on the roll-out after a landing: brake to a stop on the airfield to be repaired. */
 export function landingHint(bindings: Bindings, gamepad: boolean): string {
-  const idle = gamepad ? 'LT' : keyLabel(bindings.throttleDown[0]);
   const brakes = gamepad ? 'D-pad up' : keyLabel(bindings.airbrake[0]);
-  return `LANDED · ${idle} throttle to idle · ${brakes} brakes · stop on the runway to repair, then full power to take off`;
+  return `LANDED · ${brakes} brakes · stop to repair, then full power to take off`;
 }
 
 const pt: ScreenPoint = { x: 0, y: 0 };

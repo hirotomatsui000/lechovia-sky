@@ -367,7 +367,7 @@ State: `{pos, vel, quat, angVel, throttle, airbrake}`, plus derived `alpha, beta
 - **Ground handling (M4, runway spawns), as built:**
   - `FlightState` has `gear` (1 down … 0 up) and `onGround`. On the wheels a separate step runs: gear springs
     (natural frequency 9 rad/s, damping 0.8; the reference point rests about 2.4 m above the runway), rolling friction
-    0.025 and wheel brakes 0.35 (the airbrake key), no side slip, nose-wheel steering from the roll and rudder inputs
+    0.025 and wheel brakes 0.35 (the airbrake key; since revision 22 they also idle the engines), no side slip, nose-wheel steering from the roll and rudder inputs
     (25 °/s slow, 4 °/s fast), and rotation up to 14° nose up once the dynamic pressure gives the elevator authority
     (full at 4 kPa, about 155 kt). The jet leaves the ground when lift exceeds weight.
   - Wheels touch only inside an airfield's flattened ground (the runway plus 400 m beyond each end, ±450 m across);
@@ -653,7 +653,8 @@ The owner asked for a way to fly home and take on missiles and gun rounds again 
   jet's, and the tanks full. The roll-out after a landing counts the same, below 130 m/s on the runway.
 - **Stopped:** on the wheels anywhere on a friendly airfield's ground (the runway, its overruns and ±450 m either
   side, so a jet that has steered off the runway still counts) at under 5 m/s for 5 s, the jet is repaired to full hit
-  points as well. Above about half throttle the engines outpull the brakes, so the roll-out hint says to idle.
+  points as well. On the wheels the brakes also take the engines to idle: above about half throttle they outpull the
+  brakes, and in the browser a jet landed at 80% throttle rolled on at 40 m/s with the brakes on.
 - Each happens once per stay in that state, and only when it would give something (a weapon or flare used, fuel
   under 90%, or for a stop damage), so a runway start or a climb-out over the home field gives nothing. Bombs belong
   to a Strike sortie and are not reloaded. The World emits `resupplied` (with `repaired` after a stop) and exposes
@@ -1044,8 +1045,7 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   met), and then `GEAR DOWN  SINK 640 FT/MIN` (sink amber past 70% of the touchdown limit, red past it). Taking on
   supplies shows `REARMING 60%` or `REPAIRING 60%` with a bar, then a `REARMED · REFUELLED` or `REARMED · REPAIRED`
   banner and a chime. The gear motor sounds as the gear comes down too. From a touchdown until the jet stops or flies
-  again, the hint line reads `LANDED · Z throttle to idle · B brakes · stop on the runway to repair, then full power to
-  take off`. The map screen gives the distance
+  again, the hint line reads `LANDED · B brakes · stop to repair, then full power to take off`. The map screen gives the distance
   to every airfield you can use (`✈ Wilkowo Air Base · 43 km`).
 - **G effects:** red tint below −2.5 G (a third as strong with reduce motion, M5). Revision 21 (`hud/g-vision.ts`), from
   the pilot's G strain (§8): past 0.3 the view turns red (full by halfway to G-LOC), darkness closes in from the

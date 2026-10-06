@@ -35,7 +35,7 @@ describe('the way home (revision 22)', () => {
   it('gives the supply pass limits in the jet\'s units, and the roll-out hint with the brake key', () => {
     expect(supplyLimits('imperial')).toEqual({ speed: '250 KT', height: '450 FT' });
     expect(supplyLimits('metric')).toEqual({ speed: '460 KM/H', height: '150 M' });
-    expect(landingHint(DEFAULT_BINDINGS, false)).toContain('Z throttle to idle · B brakes');
-    expect(landingHint(DEFAULT_BINDINGS, true)).toContain('LT throttle to idle · D-pad up brakes');
+    expect(landingHint(DEFAULT_BINDINGS, false)).toContain('B brakes · stop to repair');
+    expect(landingHint(DEFAULT_BINDINGS, true)).toContain('D-pad up brakes');
   });
 });

@@ -15,7 +15,7 @@ export const GEAR_RETRACT_S = 4;
 /** Extra drag coefficient of the extended gear. */
 export const GEAR_DRAG = 0.02;
 export const ROLLING_FRICTION = 0.025;
-/** Wheel brakes (the airbrake key on the ground). */
+/** Wheel brakes (the airbrake key on the ground); they also take the engines to idle (revision 22). */
 export const BRAKE_FRICTION = 0.35;
 /** Nose-up limit on the wheels before the tail would strike. */
 export const ROTATION_LIMIT_RAD = 14 * DEG;
@@ -61,7 +61,9 @@ export function stepGround(s: FlightState, input: ControlInput, p: AircraftPhysi
     return;
   }
   atmosphere(s.pos.y, air);
-  s.throttle = approach(s.throttle, clamp(input.throttle, 0, 1), dt, 0.6);
+  // Braking idles the engines (revision 22): above about half throttle they outpull the brakes, and a jet landed with
+  // the throttle half open would roll on and never stop to be repaired.
+  s.throttle = approach(s.throttle, input.airbrake ? 0 : clamp(input.throttle, 0, 1), dt, 0.6);
   s.airbrake = moveToward(s.airbrake, input.airbrake ? 1 : 0, dt);
 
   fwd.set(0, 0, -1).applyQuaternion(s.quat);

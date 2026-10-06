@@ -112,6 +112,15 @@ describe('ground handling and take-off (spec §8, M4)', () => {
     expect(s.onGround).toBe(true);
   });
 
+  it('stops on the brakes whatever the throttle, as they idle the engines (revision 22)', () => {
+    const s = runwayFlightState(field, 0);
+    s.vel.set(Math.sin(field.headingRad) * 40, 0, -Math.cos(field.headingRad) * 40);
+    s.throttle = 0.8;
+    run(s, 'shade', 20, () => ({ throttle: 0.8, airbrake: true }));
+    expect(s.vel.length()).toBeLessThan(0.5);
+    expect(s.throttle).toBeLessThan(0.05);
+  });
+
   it('holds still on the brakes, resting on the gear', () => {
     const s = runwayFlightState(field, 0);
     s.throttle = 0;

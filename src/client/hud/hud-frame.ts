@@ -3,6 +3,7 @@ import type { ModeStatus } from '../../shared/modes/mode.ts';
 import type { WeaponSelect } from '../../shared/physics/controls.ts';
 import type { AircraftView, GroundTargetView, MissileView } from '../session/game-session.ts';
 import type { KillFeedLine } from './kill-feed.ts';
+import type { HomeCue } from './supply-hud.ts';
 import type { TrainingPrompt } from './training-prompts.ts';
 
 /** Everything the HUD draws in one frame. */
@@ -51,4 +52,6 @@ export interface HudFrame {
   wind?: Vector3;
   /** what to do in a spin, under the SPIN warning (revision 16) */
   spinHint?: string;
+  /** the nearest friendly airfield, for the way home and the landing (revision 22) */
+  home?: HomeCue | null;
 }

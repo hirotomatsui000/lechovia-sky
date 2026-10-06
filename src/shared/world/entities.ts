@@ -10,6 +10,7 @@ import { TRIGGER_AT_REST } from '../weapons/cannon.ts';
 import type { SupportSpec } from '../modes/mode.ts';
 import { MotionHistory } from './history.ts';
 import type { SpawnStart } from './spawns.ts';
+import type { SupplyKind } from './supply.ts';
 
 export interface StoresState {
   cannonRounds: number;
@@ -81,6 +82,9 @@ export interface AircraftEntity extends CreditRecord {
   gStrain: number;
   /** tick at which the pilot blacked out (G-LOC), -1 while conscious */
   blackoutTick: number;
+  /** how the jet is taking on supplies at a friendly airfield now, and for how many ticks (revision 22) */
+  supplyKind: SupplyKind | null;
+  supplyTicks: number;
 }
 
 export interface NewAircraft {
@@ -141,6 +145,8 @@ export function createAircraftEntity(n: NewAircraft): AircraftEntity {
     nextAircraftId: null,
     gStrain: 0,
     blackoutTick: -1,
+    supplyKind: null,
+    supplyTicks: 0,
   };
   resetForSpawn(entity);
   return entity;
@@ -152,6 +158,8 @@ export function resetForSpawn(a: AircraftEntity): void {
   a.hp = a.config.damage.hitPoints;
   a.gStrain = 0;
   a.blackoutTick = -1;
+  a.supplyKind = null;
+  a.supplyTicks = 0;
   a.stores.cannonRounds = s.cannonRounds;
   a.stores.srm = s.srm;
   a.stores.mrm = a.lanceLoad ?? s.mrm;

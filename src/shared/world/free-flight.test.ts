@@ -35,7 +35,7 @@ describe('Free Flight weather and clock (M5)', () => {
 });
 
 describe('Free Flight "fly from here" (M5)', () => {
-  it('puts the jet in the air over the point, inside the combat area, and only in Free Flight', () => {
+  it('puts the jet in the air over the point, anywhere on the map, and only in Free Flight', () => {
     const w = new World({ map, terrain, mode: new FreeFlightMode(), seed: 1 });
     const a = w.addAircraft({ callsign: 'A', team: 'usa', aircraftId: 'kestrel' });
     w.drainEvents();
@@ -45,8 +45,18 @@ describe('Free Flight "fly from here" (M5)', () => {
     expect(a.flight.pos.y).toBeGreaterThanOrEqual(Math.max(2000, terrain.surfaceAt(5000, 12000) + 1500) - 1);
     expect(a.spawnGen).toBe(2);
     expect(w.drainEvents()).toEqual([{ type: 'spawned', aircraftId: a.id, spawnGen: 2 }]);
-    w.flyFrom(a.id, 90000, 0);
-    expect(Math.hypot(a.flight.pos.x, a.flight.pos.z)).toBeLessThanOrEqual(0.9 * map.combatArea.radiusM + 1);
+    // Outside the combat area, where the map screen was clicked (revision 22), with no boundary countdown.
+    const corner = map.sizeM / 2 - 3000;
+    expect(Math.hypot(corner, corner)).toBeGreaterThan(map.combatArea.radiusM);
+    w.flyFrom(a.id, corner, -corner);
+    expect(a.flight.pos.x).toBeCloseTo(corner, 0);
+    expect(a.flight.pos.z).toBeCloseTo(-corner, 0);
+    run(w, 2 * TICK_RATE);
+    expect(w.boundarySecondsLeft(a)).toBeNull();
+    // Off the map it stops just inside the edge.
+    w.flyFrom(a.id, 3 * map.sizeM, 0);
+    expect(a.flight.pos.x).toBeLessThan(map.sizeM / 2);
+    expect(a.flight.pos.x).toBeGreaterThan(map.sizeM / 2 - 5000);
     // A dead pilot flies again at once.
     w.applyDamage(a, 999, null, 'cannon');
     expect(w.flyFrom(a.id, 0, 0)).toBe(true);

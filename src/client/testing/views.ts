@@ -27,6 +27,7 @@ export function testView(id: number, over: Partial<AircraftView> = {}): Aircraft
     respawnInS: null,
     gStrain: 0,
     blackedOutS: null,
+    supply: null,
     kills: 0,
     deaths: 0,
     firingCannon: false,

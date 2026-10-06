@@ -1,4 +1,4 @@
-# Lechovia Skies — Design Spec (revision 21)
+# Lechovia Skies — Design Spec (revision 22)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -69,6 +69,13 @@
     the jet spirals into the ground, a death of its own (§11). AI pilots ease off before it (§14), and the balance
     tournament still passes (§9.4). The bare address lechovia-skies.github.io, and links cut short, now lead to the
     game (§24).
+  - Revision 22 (2026-10-06): at the owner's request, landing and rearming (§10.6): a low, slow pass over a friendly
+    runway, or the roll-out after a landing, reloads missiles, gun rounds and flares and refuels; stopped on the
+    runway the jet is repaired too. The gear comes down by itself on approach (§8), the HUD points the way home and
+    reads out the approach (§15.2), and the map gives the distance to every airfield you can use. The owner also
+    reported the map screen "out of place"; nothing was off in a match, but Free Flight pulled a click near the edge
+    of the map back into the combat area, so you flew from somewhere else: Free Flight now opens the whole map
+    (§13.5).
 - **Owner:** Hiroto Matsui
 - **Title:** Lechovia Skies (`lechovia-skies`); the working title until revision 19 was Contested Skies.
 
@@ -120,7 +127,7 @@ was built in M2 and removed again.)
 | Aircraft models | The owner's 3D models (generated with Tripo, inspired by the F-35A and the Su-57) replace the generated models of the Kestrel and the Kobchik. Names and specifications stay fictional; an aircraft without a model file keeps the generated model | Owner request, 2026-10-01 |
 | Maps per mode | Dogfight and Free Flight fly over Lechovia by default (the Test Range stays selectable); Strike and Training keep the Test Range they were laid out and balanced on | M4, 2026-10-01 |
 | Sky | A computed (Preetham) sky, sun, moon and stars replace the sky photo, which could show only one hour in one weather; the satellite-photo ground stays | M4, 2026-10-01 |
-| Runway starts | A per-pilot choice (title screen: Air or Runway start); bots always start in the air; the gear retracts by itself and touching the ground with it up is a crash (no landing, §23) | M4, 2026-10-01 |
+| Runway starts | A per-pilot choice (title screen: Air or Runway start); bots always start in the air; the gear retracts by itself and touching the ground with it up is a crash (no landing, §23; landing arrived in revision 22, §10.6) | M4, 2026-10-01 |
 | Zone capture | A zone's progress runs −1 (Russia) … +1 (USA) and moves toward the side with more aircraft inside at advantage / 10 s; a side owns it at its end of the scale and loses it when pushed back past 0. Only zones score in Air Superiority | M5, 2026-10-01 |
 | Team Objective scoring | Every death of a fighter gives the other team +1 (as in Team Deathmatch); a Sentinel +20 | M5, 2026-10-01 |
 | Datalink | Built in M5: each pilot sees the enemies on teammates' radar, drawn hollow, never lockable. Sentinels carry a 150 km all-round radar, so they feed it | M5, 2026-10-01 |
@@ -364,9 +371,15 @@ State: `{pos, vel, quat, angVel, throttle, airbrake}`, plus derived `alpha, beta
     (25 °/s slow, 4 °/s fast), and rotation up to 14° nose up once the dynamic pressure gives the elevator authority
     (full at 4 kPa, about 155 kt). The jet leaves the ground when lift exceeds weight.
   - Wheels touch only inside an airfield's flattened ground (the runway plus 400 m beyond each end, ±450 m across);
-    rolling off it is a crash. A gentle touchdown with the gear still fully down (a bounce on the take-off run) rolls on.
+    rolling off it is a crash. A gentle touchdown with the gear fully down rolls on: sinking slower than 5 m/s, less
+    than 15° of bank, pitch −3° to 16° (revision 22, for landing; it was 3 m/s, 10°, −2° to 15°, only for a bounce on
+    the take-off run).
   - The gear retracts over 4 s once the jet is 30 m above the airfield or has left it, and adds drag (CD +0.02) while
     out. Every jet lifts off within the runway at military power (190–230 kt, 15–24 s) and at full afterburner.
+  - Revision 22: the gear comes down by itself, over 4 s, on approach to a friendly airfield (§10.6): within 6 km of
+    the runway's ends and 1.5 km of its centre line, under 450 m above it, slower than 140 m/s and not climbing faster
+    than 2 m/s. With the gear moving or down there is no PULL UP warning. Every jet lands from a 3° approach at about
+    80 m/s with a plain autopilot (touchdown sink about 1 m/s) and stops on the brakes within the runway.
 - **Fuel (revision 16):** `physics.fuelKg` is internal fuel, included in `massKg` (the full-tank mass); the mass in the
   equations is `massKg − fuel burnt`. Fuel flow follows thrust: 2.1·10⁻⁵ kg/(N·s) up to military power and
   1.05·10⁻⁴ kg/(N·s) for the afterburner's extra thrust, never under 8% of the military-power flow (Kestrel at sea
@@ -628,6 +641,23 @@ change it).
 Aces stay hard: they release the most flares and break best. A first try with stronger assists (×0.2 decoy, 30 g,
 0.25 s lag) made the Dart hit 57–73% and the player win nine duels in ten; the owner asked for "a little" easier.
 
+### 10.6 Rearming at an airfield (revision 22)
+
+The owner asked for a way to fly home and take on missiles and gun rounds again (`src/shared/world/supply.ts`).
+
+- **Where:** the team's own airfield or a neutral one; never the enemy's. Lechovia has one of each team's and two
+  neutral (Wilkowo and Sokolica, 58 km either side of the middle; Morzysko and Skalnik). Strike and Training fly on
+  the Test Range, which has none.
+- **Supply pass:** over the runway (its length, within 250 m of the centre line), at most 150 m above it and 130 m/s
+  (about 250 kt), for 3 s: missiles (Darts, Lances, or the mode's Lance load), gun rounds and flares back to a fresh
+  jet's, and the tanks full. The roll-out after a landing counts the same, below 130 m/s on the runway.
+- **Stopped:** on a friendly runway at under 5 m/s for 5 s, the jet is repaired to full hit points as well.
+- Each happens once per stay in that state, and only when it would give something (a weapon or flare used, fuel
+  under 90%, or for a stop damage), so a runway start or a climb-out over the home field gives nothing. Bombs belong
+  to a Strike sortie and are not reloaded. The World emits `resupplied` (with `repaired` after a stop) and exposes
+  the progress (`World.supplyProgress`).
+- AI pilots do not fly home to rearm; the rule applies to them all the same.
+
 ## 11. Damage model
 
 - **Hit points** per aircraft (§9.3). Cannon damage is per projectile; missile blast uses distance falloff (§10.2).
@@ -848,9 +878,12 @@ and the player's jet decides the side: the Kestrel defends for the USA, the Kobc
 - **Sky:** the pause menu sets the time of day (Dawn, Day, Dusk, Night), the clock and the weather; the World winds its
   start hour back so the chosen hour holds now, rebuilds its clouds, and the client rebuilds its sky. Online, the
   change applies to the whole room.
-- **Fly from here:** on the map screen a click flies the jet from that point (inside 0.9 × the combat area, at least
-  2,000 m and 1,500 m above the ground, heading for the middle), or from the runway when the click is within 2.5 km
-  of an airfield.
+- **Fly from here:** on the map screen a click flies the jet from that point (at least 2,000 m and 1,500 m above the
+  ground, heading for the middle), or from the runway when the click is within 2.5 km of an airfield.
+- **The whole map (revision 22):** Free Flight has no combat area: only leaving the map's square (or climbing above
+  18 km) starts the boundary countdown, a click flies you from where you clicked (kept 2 km inside the edge), and the
+  map screen draws no dashed circle. It used to pull a click into 0.9 × the combat area, so a click near the map's
+  edge flew you from tens of kilometres away.
 - **Target drones (offline):** four unarmed enemy jets on orbits 6 km round the player; a drone shot down is cleared
   after 2 s and replaced after 10 s; they follow the player to a new spawn. Weapons work only while they fly.
 
@@ -1001,6 +1034,16 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
     the owner took it for a broken aiming line.)
   - **Defender:** banners `TARGET B UNDER ATTACK` (when a target is hit, at most once per 3 s per target) and
     `TARGET B DESTROYED`; the kill feed also records destroyed targets.
+- **The way home and the landing (revision 22, `hud/supply-hud.ts`):** with no missiles or no gun rounds left, fuel
+  under BINGO or hit points under 30%, a diamond marks the nearest friendly airfield with the reason and the range
+  (`RTB · REARM · WILKOWO AIR BASE 43 KM`), or an amber edge arrow when it is off screen; with both missiles and rounds
+  gone a `WEAPONS EMPTY · RTB TO REARM` banner shows once. Within 12 km of a friendly runway and 1,500 m above it the
+  HUD outlines the runway and reads out the supply pass, `SUPPLY PASS  SPD 280/250 KT  ALT 820/450 FT` (green once
+  met), and then `GEAR DOWN  SINK 640 FT/MIN` (sink amber past 70% of the touchdown limit, red past it). Taking on
+  supplies shows `REARMING 60%` or `REPAIRING 60%` with a bar, then a `REARMED · REFUELLED` or `REARMED · REPAIRED`
+  banner and a chime. The gear motor sounds as the gear comes down too. On the roll-out the hint line reads
+  `LANDED · B brakes · stop on the runway to repair, then full power to take off`. The map screen gives the distance
+  to every airfield you can use (`✈ Wilkowo Air Base · 43 km`).
 - **G effects:** red tint below −2.5 G (a third as strong with reduce motion, M5). Revision 21 (`hud/g-vision.ts`), from
   the pilot's G strain (§8): past 0.3 the view turns red (full by halfway to G-LOC), darkness closes in from the
   edges until the middle goes too, and the last quarter goes black; the G readout turns amber, then red past halfway.
@@ -1308,7 +1351,8 @@ brief (§11 of the brief: steps 1–11).
 - Accounts, rankings and leaderboards; records shared between browsers or devices. (Records kept in one browser
   arrived in revision 17.)
 - Free-text and voice chat (preset quick-chat is in scope, M2).
-- Landing and rearming. (Fuel, spins/departures and wind arrived in revision 16.)
+- (Landing and rearming arrived in revision 22, §10.6; fuel, spins/departures and wind in revision 16.) AI pilots
+  flying home to rearm.
 - Air-to-ground weapons other than the Strike mode's abstract bomb (§10.4), which never damages aircraft.
 - Real-world map data.
 - Functional cockpit instruments/MFDs.

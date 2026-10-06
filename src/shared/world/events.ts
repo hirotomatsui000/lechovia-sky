@@ -10,6 +10,8 @@ export type GameEvent =
   | { type: 'destroyed'; aircraftId: number; cause: DeathCause; killerId: number | null }
   /** the pilot blacked out under G (G-LOC, revision 21): the stick no longer answers */
   | { type: 'blackout'; aircraftId: number }
+  /** missiles, gun rounds, flares and fuel taken on at a friendly airfield; `repaired` after a landing (revision 22) */
+  | { type: 'resupplied'; aircraftId: number; repaired: boolean }
   | { type: 'hit'; aircraftId: number; attackerId: number | null; weapon: WeaponKind; damage: number }
   | { type: 'missileLaunched'; missileId: number; shooterId: number; targetId: number; kind: MissileKind }
   | { type: 'missileDetonated'; missileId: number; x: number; y: number; z: number; nearAircraft: boolean }

@@ -11,6 +11,12 @@ is rebuilt after every push ([Publish as a website](#publish-as-a-website)). The
 **Current milestone: M5 "Modes & polish"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
 "Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02: the game is
 single player against AI pilots and runs entirely in the browser.
+- **Rearm at an airfield** (2026-10-06, Lechovia): out of missiles or rounds, the HUD points the way to the nearest
+  airfield you can use (your team's or a neutral one). Fly low and slow along its runway (under about 250 kt and
+  450 ft for 3 s) to reload missiles, gun rounds and flares and refuel; or land: the gear comes down by itself on
+  approach, the HUD outlines the runway and shows your sink rate, and stopped on the runway (B brakes) you are also
+  repaired. The map (M) shows how far each of those airfields is. In Free Flight the whole map is open: a click on
+  the map flies you from exactly there.
 - **G blackout** (2026-10-06): pulling harder than 7 G strains you. Hold it and the view turns red and darkens from
   the edges in (the G readout turns amber, then red); at its darkest you black out (G-LOC): the stick no longer
   answers, and the jet spirals into the ground. Full stick in a fast turn takes the view after about 4 s and blacks

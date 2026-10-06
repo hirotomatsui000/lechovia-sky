@@ -26,6 +26,7 @@ import { type AircraftEntity, createAircraftEntity, resetForSpawn } from './enti
 import type { DeathCause, GameEvent, WeaponKind } from './events.ts';
 import { createGroundTarget, damageGroundTarget, type GroundTarget } from './ground-targets.ts';
 import { runwayFlightState, type SpawnStart, spawnFlightState, teamAirfield } from './spawns.ts';
+import { needsSupply, onApproach, resupply, SUPPLY_LANDED_S, SUPPLY_PASS_S, supplyAt, type SupplyKind } from './supply.ts';
 import { CALM_NOON, type EnvironmentSettings, hourAt } from './time-of-day.ts';
 import { CloudField, WEATHER } from './weather.ts';
 
@@ -36,10 +37,10 @@ export const CEILING_M = 18000;
 export const GROUND_CLEARANCE_M = 2;
 /** AI pilots stay off the afterburner below this share of fuel (revision 16). */
 export const AI_FUEL_SAVING_SHARE = 0.25;
-/** Free Flight's "fly from here" (M5): at least this high, and this far above the ground, inside this share of the area. */
+/** Free Flight's "fly from here" (M5): at least this high, and this far above the ground, this far inside the map's edge. */
 const FLY_FROM_MIN_ALTITUDE_M = 2000;
 const FLY_FROM_CLEARANCE_M = 1500;
-const FLY_FROM_AREA_SHARE = 0.9;
+const FLY_FROM_EDGE_M = 2000;
 
 export interface WorldOptions {
   map: MapDefinition;
@@ -105,7 +106,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
   private readonly bots = new Map<number, { pilot: Pilot; input: ControlInput }>();
   private events: GameEvent[] = [];
   private nextId = 1;
-  private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1, groundM: NaN, wind: new Vector3(), fuelUsedKg: 0 };
+  private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1, groundM: NaN, wind: new Vector3(), fuelUsedKg: 0, gearWanted: false };
   private readonly approach: Approach = { distance: 0, fraction: 0 };
   private readonly living: AircraftEntity[] = [];
 
@@ -136,18 +137,16 @@ export class World implements ModeDirector, CombatHost, BotWorld {
 
   /**
    * Free Flight (M5): puts a pilot's jet in the air over (x, z), or on the runway when the point is on an airfield,
-   * at once and fully repaired. The point is kept inside the combat area. False in other modes.
+   * at once and fully repaired. The point is kept just inside the map's edge (revision 22: it used to be pulled into the
+   * combat area, so a click near the edge of the map screen flew you from somewhere else). False in other modes.
    */
   flyFrom(id: number, x: number, z: number): boolean {
     const a = this.aircraft.get(id);
     if (!a || a.support || this.mode.id !== 'free-flight') return false;
+    const half = this.map.sizeM / 2 - FLY_FROM_EDGE_M;
+    x = Math.min(half, Math.max(-half, x));
+    z = Math.min(half, Math.max(-half, z));
     const c = this.map.combatArea;
-    const d = Math.hypot(x - c.x, z - c.z);
-    const limit = FLY_FROM_AREA_SHARE * c.radiusM;
-    if (d > limit) {
-      x = c.x + ((x - c.x) * limit) / d;
-      z = c.z + ((z - c.z) * limit) / d;
-    }
     const field = this.map.features ? airfieldGroundAt(this.map.features.airfields, x, z) : null;
     let flight: FlightState;
     if (field) {
@@ -362,6 +361,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       env.groundM = airfieldGroundHeight(this.map.features, a.flight.pos.x, a.flight.pos.z);
       this.wind.at(a.flight.pos, timeS, env.wind);
       env.fuelUsedKg = a.config.physics.fuelKg - a.stores.fuelKg;
+      env.gearWanted = onApproach(this.map.features, a.team, a.flight);
       stepFlight(a.flight, a.input, a.config.physics, DT, env);
       a.stores.fuelKg = Math.max(0, a.stores.fuelKg - a.flight.fuelFlow * DT);
       a.history.record(a.flight.pos, a.flight.vel);
@@ -391,6 +391,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       } else {
         a.outOfBoundsTicks = 0;
       }
+      if (a.alive) this.updateSupply(a);
     }
     for (const a of this.aircraft.values()) {
       // Button presses act once, even if no new input arrives next tick.
@@ -432,6 +433,10 @@ export class World implements ModeDirector, CombatHost, BotWorld {
   }
 
   isOutOfBounds(a: AircraftEntity): boolean {
+    if (this.mode.wholeMap) {
+      const half = this.map.sizeM / 2;
+      return Math.abs(a.flight.pos.x) > half || Math.abs(a.flight.pos.z) > half || a.flight.pos.y > CEILING_M;
+    }
     const c = this.map.combatArea;
     const dx = a.flight.pos.x - c.x;
     const dz = a.flight.pos.z - c.z;
@@ -446,6 +451,18 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     if (a.alive || a.respawnAtTick < 0) return null;
     if (a.support === null && !this.mode.canRespawn(a.team)) return null;
     return Math.max(0, (a.respawnAtTick - this.tick) / TICK_RATE);
+  }
+
+  /**
+   * How far along the jet is in taking on supplies at a friendly airfield (revision 22): a supply pass (or the roll-out
+   * after a landing) rearms and refuels, a stop also repairs. Null when it is not taking any, or needs none.
+   */
+  supplyProgress(a: AircraftEntity): { kind: SupplyKind; progress: number } | null {
+    if (!a.alive || a.supplyKind === null) return null;
+    const repair = a.supplyKind === 'landed';
+    const need = (repair ? SUPPLY_LANDED_S : SUPPLY_PASS_S) * TICK_RATE;
+    if (a.supplyTicks >= need || !needsSupply(a, repair)) return null;
+    return { kind: a.supplyKind, progress: a.supplyTicks / need };
   }
 
   /** Seconds since the pilot blacked out (G-LOC, revision 21); null while conscious or shot down. */
@@ -487,6 +504,21 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     this.emit({ type: 'destroyed', aircraftId: a.id, cause, killerId: killer ? killer.id : null });
     this.combat.forget(a.id);
     this.mode.onAircraftDestroyed(this, a, killer, cause);
+  }
+
+  /** Supplies at a friendly airfield (revision 22): once per stay, after a few seconds on a pass or stopped. */
+  private updateSupply(a: AircraftEntity): void {
+    const kind = a.support ? null : supplyAt(this.map.features, a.team, a.flight);
+    if (kind !== a.supplyKind) {
+      a.supplyKind = kind;
+      a.supplyTicks = 0;
+    }
+    if (kind === null) return;
+    a.supplyTicks++;
+    const repair = kind === 'landed';
+    if (a.supplyTicks !== (repair ? SUPPLY_LANDED_S : SUPPLY_PASS_S) * TICK_RATE || !needsSupply(a, repair)) return;
+    resupply(a, repair);
+    this.emit({ type: 'resupplied', aircraftId: a.id, repaired: repair });
   }
 
   /** A runway start on the team's airfield when the mode and map have one, else the mode's airborne spawn line. */

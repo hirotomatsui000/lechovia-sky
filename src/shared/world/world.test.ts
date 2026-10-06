@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildTerrain } from '../data/maps/map-definition.ts';
 import { createTestRange } from '../data/maps/test-range.ts';
 import { FreeFlightMode } from '../modes/free-flight.ts';
+import { TeamDeathmatchMode } from '../modes/team-deathmatch.ts';
 import { type ControlInput, neutralInput } from '../physics/controls.ts';
 import { BOUNDARY_GRACE_S, TICK_RATE, World } from './world.ts';
 
@@ -70,7 +71,7 @@ describe('World', () => {
   });
 
   it('destroys an aircraft that stays outside the combat area', () => {
-    const w = newWorld();
+    const w = new World({ map, terrain, mode: new TeamDeathmatchMode(), seed: 7 });
     const a = w.addAircraft({ callsign: 'A', team: 'usa', aircraftId: 'kestrel' });
     a.flight.pos.set(28000, 5000, 0);
     run(w, TICK_RATE);
@@ -81,6 +82,16 @@ describe('World', () => {
     run(w, 5);
     expect(a.alive).toBe(false);
     expect(w.drainEvents().some((e) => e.type === 'destroyed' && e.cause === 'boundary')).toBe(true);
+  });
+
+  it('opens the whole map in Free Flight: only its edge is the boundary (revision 22)', () => {
+    const w = newWorld();
+    const a = w.addAircraft({ callsign: 'A', team: 'usa', aircraftId: 'kestrel' });
+    a.flight.pos.set(map.sizeM / 2 - 1000, 5000, 0);
+    expect(Math.abs(a.flight.pos.x)).toBeGreaterThan(map.combatArea.radiusM);
+    expect(w.isOutOfBounds(a)).toBe(false);
+    a.flight.pos.set(0, 5000, -(map.sizeM / 2 + 1000));
+    expect(w.isOutOfBounds(a)).toBe(true);
   });
 
   it('treats the altitude ceiling as out of bounds', () => {

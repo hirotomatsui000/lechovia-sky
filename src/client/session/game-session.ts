@@ -15,6 +15,7 @@ import type { EnvironmentSettings } from '../../shared/world/time-of-day.ts';
 import type { WeatherId } from '../../shared/world/weather.ts';
 import type { StoresState } from '../../shared/world/entities.ts';
 import type { GameEvent } from '../../shared/world/events.ts';
+import type { SupplyKind } from '../../shared/world/supply.ts';
 
 /** What the renderer and HUD may know about an aircraft. */
 export interface AircraftView {
@@ -41,6 +42,8 @@ export interface AircraftView {
   gStrain: number;
   /** match seconds since the pilot blacked out (G-LOC); null while conscious */
   blackedOutS: number | null;
+  /** taking on supplies at a friendly airfield (revision 22): how, and how far along; null otherwise */
+  supply: { kind: SupplyKind; progress: number } | null;
   kills: number;
   deaths: number;
   firingCannon: boolean;

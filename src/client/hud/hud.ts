@@ -23,6 +23,7 @@ import { AMBER, FONT, FONT_BIG, FONT_SMALL, GREEN, PRIMARY, RED, SHADOW, WHITE }
 import { Projector, type ScreenPoint } from './projector.ts';
 import { drawRadarScope } from './radar-scope.ts';
 import { drawStrikeMarkers, drawStrikeStatus } from './strike-layer.ts';
+import { drawSupply } from './supply-hud.ts';
 import { drawTrainingLayer } from './training-layer.ts';
 
 export type { HudFrame } from './hud-frame.ts';
@@ -108,6 +109,7 @@ export class Hud {
       this.drawThrottle(f);
       this.drawStatus(f);
       this.drawWarnings(f, blink);
+      drawSupply(ctx, this.projector, f);
       if (f.status.modeId !== 'free-flight' || f.status.drones) {
         drawDatalink(ctx, this.projector, f);
         drawCombatLayer(ctx, this.projector, f, blink);

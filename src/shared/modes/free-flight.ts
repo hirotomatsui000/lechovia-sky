@@ -28,6 +28,8 @@ interface DroneSlot {
 export class FreeFlightMode implements GameMode {
   readonly id = 'free-flight' as const;
   readonly runwayStarts: boolean = true;
+  /** Sightseeing goes anywhere on the map (revision 22): the map screen flies you from wherever you click. */
+  readonly wholeMap = true;
   readonly respawnDelayS = 3;
   private drones = false;
   private readonly slots: DroneSlot[] = [];

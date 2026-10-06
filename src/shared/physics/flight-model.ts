@@ -50,9 +50,11 @@ export interface FlightEnv {
   wind: Vector3;
   /** fuel burnt since the tanks were full: the jet is this much lighter than `massKg` */
   fuelUsedKg: number;
+  /** on approach to a friendly airfield: the gear comes down (revision 22) */
+  gearWanted: boolean;
 }
 
-export const DEFAULT_FLIGHT_ENV: Readonly<FlightEnv> = { thrustScale: 1, rollScale: 1, groundM: NaN, wind: new Vector3(), fuelUsedKg: 0 };
+export const DEFAULT_FLIGHT_ENV: Readonly<FlightEnv> = { thrustScale: 1, rollScale: 1, groundM: NaN, wind: new Vector3(), fuelUsedKg: 0, gearWanted: false };
 
 export interface FlightStateInit {
   position: Vector3;
@@ -317,8 +319,8 @@ export function stepFlight(
   s.airspeed = speed;
   s.thrust = thrust;
   s.fuelFlow = fuelFlowKgS(s.throttle, p, air.sigma, mach, env.thrustScale);
-  if (s.gear > 0) {
-    updateGear(s, dt, env.groundM);
+  if (s.gear > 0 || env.gearWanted) {
+    updateGear(s, dt, env.groundM, env.gearWanted);
     if (gentleTouchdown(s, env.groundM)) s.onGround = true;
   }
 }

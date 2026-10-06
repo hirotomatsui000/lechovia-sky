@@ -14,7 +14,7 @@ describe('damage', () => {
   });
 
   it('weakens the engine and controls as damage grows', () => {
-    const env = { thrustScale: 1, rollScale: 1, groundM: NaN, wind: new Vector3(), fuelUsedKg: 0 };
+    const env = { thrustScale: 1, rollScale: 1, groundM: NaN, wind: new Vector3(), fuelUsedKg: 0, gearWanted: false };
     expect(damageFlightEnv('healthy', env)).toMatchObject({ thrustScale: 1, rollScale: 1 });
     expect(damageFlightEnv('damaged', env)).toMatchObject({ thrustScale: 0.9, rollScale: 1 });
     expect(damageFlightEnv('critical', env)).toMatchObject({ thrustScale: 0.75, rollScale: 0.7 });

@@ -8,7 +8,8 @@ import type { FlightEnv, FlightState } from './flight-model.ts';
 
 /** Height of the aircraft's reference point above the runway when the gear is unloaded (spec §8, M4). */
 export const GEAR_HEIGHT_M = 2.5;
-/** The gear retracts by itself once the jet is this high above the airfield, or has left it. */
+/** The gear retracts by itself once the jet is this high above the airfield, or has left it, and comes down by itself on
+ * approach to a friendly one (revision 22); either way it takes this long. */
 export const GEAR_RETRACT_ABOVE_M = 30;
 export const GEAR_RETRACT_S = 4;
 /** Extra drag coefficient of the extended gear. */
@@ -30,10 +31,13 @@ const SPRING_OMEGA = 9;
 const SPRING_ZETA = 0.8;
 /** Wheels this far clear of the runway while climbing: the jet is flying. */
 const LIFTOFF_CLEARANCE_M = 0.5;
-/** A touchdown on the gear is gentle enough below these (else the jet hits the ground and crashes). */
-const TOUCHDOWN_MAX_SINK_MS = 3;
-const TOUCHDOWN_MAX_BANK = 10 * DEG;
-const TOUCHDOWN_PITCH = [-2 * DEG, 15 * DEG] as const;
+/**
+ * A touchdown on the gear is gentle enough below these (else the jet hits the ground and crashes). Revision 22 made
+ * landing part of the game and loosened them from 3 m/s, 10° and −2…15°: a 3° approach at 90 m/s sinks at 4.7 m/s.
+ */
+export const TOUCHDOWN_MAX_SINK_MS = 5;
+export const TOUCHDOWN_MAX_BANK = 15 * DEG;
+const TOUCHDOWN_PITCH = [-3 * DEG, 16 * DEG] as const;
 
 /** Where the static gear compression leaves the reference point on a level runway. */
 export function restingHeight(groundM: number): number {
@@ -129,8 +133,15 @@ export function gentleTouchdown(s: FlightState, groundM: number): boolean {
   return Math.abs(euler.z) < TOUCHDOWN_MAX_BANK && euler.x > TOUCHDOWN_PITCH[0] && euler.x < TOUCHDOWN_PITCH[1];
 }
 
-/** The gear starts up once the jet is well clear of the airfield, then keeps going. */
-export function updateGear(s: FlightState, dt: number, groundM: number): void {
+/**
+ * The gear comes down while it is wanted (on approach to a friendly airfield, revision 22). Otherwise it starts up once
+ * the jet is well clear of the airfield, then keeps going.
+ */
+export function updateGear(s: FlightState, dt: number, groundM: number, wanted = false): void {
+  if (wanted) {
+    s.gear = Math.min(1, s.gear + dt / GEAR_RETRACT_S);
+    return;
+  }
   if (s.gear <= 0) return;
   const clear = !Number.isFinite(groundM) || s.pos.y - groundM > GEAR_RETRACT_ABOVE_M;
   if (s.gear < 1 || clear) s.gear = Math.max(0, s.gear - dt / GEAR_RETRACT_S);

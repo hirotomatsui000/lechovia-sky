@@ -158,6 +158,8 @@ export interface GameMode {
   datalinkUp?(team: TeamId): boolean;
   /** Pilots who ask for it start on their team's runway (M4); others always start in the air. */
   readonly runwayStarts?: boolean;
+  /** The whole map is open: only its edge, not the combat area, is the boundary (Free Flight, revision 22). */
+  readonly wholeMap?: boolean;
   /** Where a team spawns; most modes use the map's spawn lines. */
   spawnPoint(map: MapDefinition, team: TeamId): SpawnSpec;
   /** Ground targets the World places at the start (Strike); none elsewhere. */

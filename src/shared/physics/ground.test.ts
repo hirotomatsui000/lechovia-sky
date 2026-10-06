@@ -22,7 +22,7 @@ function run(
   wind = new Vector3(),
 ): void {
   const config = listAircraft().find((a) => a.id === physicsId)!;
-  const env: FlightEnv = { thrustScale: 1, rollScale: 1, groundM: NaN, wind, fuelUsedKg: 0 };
+  const env: FlightEnv = { thrustScale: 1, rollScale: 1, groundM: NaN, wind, fuelUsedKg: 0, gearWanted: false };
   const input = neutralInput(0.9);
   for (let t = 0; t < seconds; t += DT) {
     Object.assign(input, neutralInput(0.9), control(s, t));

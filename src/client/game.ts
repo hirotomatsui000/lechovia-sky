@@ -27,6 +27,7 @@ import { bombCue, releaseCue, TargetAlerts, targetDestroyedText } from './hud/st
 import { formatClock, formatTimeOfDay, speedLabel, speedValue } from './hud/format.ts';
 import { sentinelDownText, zoneEventText, zoneFeedText } from './hud/objective-hud.ts';
 import { BINGO_SHARE, spinHint } from './hud/flight-warnings.ts';
+import { homeCue, landingHint } from './hud/supply-hud.ts';
 import { takeoffHint } from './hud/takeoff.ts';
 import { trainingPrompt } from './hud/training-prompts.ts';
 import { BASE_MOUSE_SENSITIVITY, ControlMapper, type ControlMode } from './input/control-mapper.ts';
@@ -262,9 +263,9 @@ export async function startGame(
   const killFeed = new KillFeed();
   // For the end-of-match summary (M5).
   const stats = new MatchStats();
-  const mapScreen = new MapScreen(root, map, terrain);
   // Free Flight (M5): the map flies you from wherever you click; the mouse is set free while it is open.
   const freeFlight = options.mission === 'free-flight';
+  const mapScreen = new MapScreen(root, map, terrain, { combatArea: !freeFlight });
   if (freeFlight) {
     mapScreen.onPick = (x, z) => {
       session.flyFrom(x, z);
@@ -276,6 +277,8 @@ export async function startGame(
   const windAtJet = new Vector3();
   /** which fuel warnings this life has had (revision 16) */
   let fuelAlert: 'full' | 'bingo' | 'dry' = 'full';
+  /** the local jet has neither missiles nor rounds left (revision 22) */
+  let weaponsEmpty = false;
   const bufferSize = new Vector2();
   const lead = new Vector3();
   const gunLine = new Vector3();
@@ -408,6 +411,12 @@ export async function startGame(
       const d = camPos.distanceTo(burst.set(e.x, e.y, e.z));
       audio?.explosionAt(burst, explosionGain(d) * 0.6);
       if (d < EXPLOSION_SHAKE_RANGE_M) cameraRig.addTrauma(0.4 * (1 - d / EXPLOSION_SHAKE_RANGE_M));
+    } else if (e.type === 'resupplied') {
+      // Supplies at a friendly airfield (revision 22).
+      if (e.aircraftId === session.localId) {
+        showBanner(e.repaired ? 'REARMED · REPAIRED' : 'REARMED · REFUELLED', nowS, 2.5);
+        audio?.zoneChanged(true);
+      }
     } else if (e.type === 'missileDecoyed') {
       if (e.targetId === session.localId) showBanner('MISSILE DECOYED', nowS);
     } else if (e.type === 'countermeasures') {
@@ -577,14 +586,21 @@ export async function startGame(
           showBanner(missionHeading(campaignMission).toUpperCase(), nowS, MISSION_BANNER_S);
         } else if (me.flight.onGround) showBanner('CLEARED FOR TAKE-OFF', nowS);
         fuelAlert = 'full';
+        weaponsEmpty = false;
       }
-      // The gear motor runs as the wheels start to come up.
-      if (me && me.alive && me.flight.gear < 1 && lastGear >= 1) audio?.gearMotor();
+      // The gear motor runs as the wheels start to come up, or down on approach (revision 22).
+      if (me && me.alive && ((me.flight.gear < 1 && lastGear >= 1) || (me.flight.gear > 0 && lastGear <= 0))) audio?.gearMotor();
       lastGear = me?.flight.gear ?? 0;
       const controls = mapper.map(snap, me && me.alive ? me.flight : null, dt, padFrame);
       session.update(dt, controls);
       for (const e of session.drainEvents()) handleEvent(e, nowS);
       if (me) stats.sampleFlight(me.alive, me.flight.onGround, me.flight.airspeed, me.flight.gLoad, dt);
+      // Out of missiles and rounds (revision 22): once, where there is an airfield to rearm at.
+      if (me && me.alive && map.features) {
+        const empty = me.stores.srm + me.stores.mrm === 0 && me.stores.cannonRounds === 0;
+        if (empty && !weaponsEmpty) showBanner('WEAPONS EMPTY · RTB TO REARM', nowS, 3);
+        weaponsEmpty = empty;
+      }
       // Fuel warnings (revision 16): once at BINGO, once when the engines flame out.
       if (me && me.alive) {
         const fuel = me.stores.fuelKg;
@@ -741,7 +757,10 @@ export async function startGame(
         banner: nowS < bannerUntil ? banner : null,
         hint:
           local.alive && f.onGround
-            ? takeoffHint(mapper.settings.mode, local.config.hudUnits, settings.current.keys, padFrame.active)
+            ? // Rolling out with the throttle back after a landing (revision 22), else on the take-off run.
+              Math.hypot(f.vel.x, f.vel.z) > 5 && f.throttle < 0.5
+              ? landingHint(settings.current.keys, padFrame.active)
+              : takeoffHint(mapper.settings.mode, local.config.hudUnits, settings.current.keys, padFrame.active)
             : `${HINTS[mapper.settings.mode]}${local.bombLoad > 0 ? ' · G bomb' : ''}`,
         killFeed: killFeed.lines,
         hitMarker: nowS < hitMarkerUntil,
@@ -755,6 +774,7 @@ export async function startGame(
         localTime: formatTimeOfDay(session.hour()),
         wind: session.wind.steadyAt(f.pos.y, windAtJet),
         spinHint: f.spin !== 0 ? spinHint(mapper.settings.mode, f.spin, settings.current.keys, padFrame.active) : undefined,
+        home: homeCue(map.features, local),
       });
       if (audio && active) {
         const cam = renderer.camera;

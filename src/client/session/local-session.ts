@@ -236,6 +236,7 @@ export class LocalSession implements GameSession {
           respawnInS: null,
           gStrain: 0,
           blackedOutS: null,
+          supply: null,
           kills: 0,
           deaths: 0,
           firingCannon: false,
@@ -268,6 +269,7 @@ export class LocalSession implements GameSession {
       view.respawnInS = this.world.respawnInS(a);
       view.gStrain = a.gStrain;
       view.blackedOutS = this.world.blackedOutS(a);
+      view.supply = this.world.supplyProgress(a);
       view.kills = a.kills;
       view.deaths = a.deaths;
       view.firingCannon = a.firingCannon;

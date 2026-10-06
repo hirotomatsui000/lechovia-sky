@@ -5,6 +5,7 @@ import type { LandCover } from '../../shared/map/land-cover.ts';
 import type { Terrain } from '../../shared/map/terrain.ts';
 import { headingRad } from '../../shared/physics/flight-model.ts';
 import type { ModeStatus } from '../../shared/modes/mode.ts';
+import { friendlyAirfield } from '../../shared/world/supply.ts';
 import { FOE, FRIEND } from '../hud/palette.ts';
 import type { AircraftView, GroundTargetView } from '../session/game-session.ts';
 
@@ -120,13 +121,16 @@ export class MapScreen {
   private readonly canvas: HTMLCanvasElement;
   private readonly def: MapDefinition;
   private readonly terrain: Terrain;
+  /** the dashed combat area; Free Flight opens the whole map (revision 22) */
+  private readonly combatArea: boolean;
   private base: HTMLCanvasElement | null = null;
   open = false;
   private pick: ((x: number, z: number) => void) | null = null;
 
-  constructor(root: HTMLElement, def: MapDefinition, terrain: Terrain) {
+  constructor(root: HTMLElement, def: MapDefinition, terrain: Terrain, options: { combatArea?: boolean } = {}) {
     this.def = def;
     this.terrain = terrain;
+    this.combatArea = options.combatArea ?? true;
     this.overlay = document.createElement('div');
     this.overlay.className = 'map-screen';
     this.overlay.hidden = true;
@@ -177,14 +181,16 @@ export class MapScreen {
     const at = (x: number, z: number) => mapToPixel(x, z, this.def.sizeM, px);
     const def = this.def;
     // Combat area.
-    const c = at(def.combatArea.x, def.combatArea.z);
-    ctx.setLineDash([8 * s, 6 * s]);
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-    ctx.lineWidth = 1.5 * s;
-    ctx.beginPath();
-    ctx.arc(c.u, c.v, (def.combatArea.radiusM / def.sizeM) * px, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    if (this.combatArea) {
+      const c = at(def.combatArea.x, def.combatArea.z);
+      ctx.setLineDash([8 * s, 6 * s]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = 1.5 * s;
+      ctx.beginPath();
+      ctx.arc(c.u, c.v, (def.combatArea.radiusM / def.sizeM) * px, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     const label = (text: string, u: number, v: number, font: string, color = '#fff') => {
       ctx.font = font;
       ctx.textAlign = 'center';
@@ -207,7 +213,9 @@ export class MapScreen {
       for (const a of f.airfields) {
         const p = at(a.x, a.z);
         const color = a.team ? AIRFIELD_TEAM_COLORS[a.team] : '#e8e8e8';
-        label(`✈ ${a.name}`, p.u, p.v + 16 * s, `600 ${Math.round(11 * s)}px system-ui, sans-serif`, color);
+        // Where you can rearm (revision 22): how far it is from you.
+        const away = me && me.alive && friendlyAirfield(a, me.team) ? ` · ${Math.round(Math.hypot(a.x - me.position.x, a.z - me.position.z) / 1000)} km` : '';
+        label(`✈ ${a.name}${away}`, p.u, p.v + 16 * s, `600 ${Math.round(11 * s)}px system-ui, sans-serif`, color);
       }
       for (const r of f.rivers) {
         // A third of the way from the source keeps the name clear of the capital in the middle.

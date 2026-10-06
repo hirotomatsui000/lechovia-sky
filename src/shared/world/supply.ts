@@ -1,5 +1,5 @@
 import type { TeamId } from '../data/aircraft/types.ts';
-import { type Airfield, airfieldLocal, type MapFeatures } from '../map/features.ts';
+import { AIRFIELD_GROUND_HALF_WIDTH_M, AIRFIELD_GROUND_OVERRUN_M, type Airfield, airfieldLocal, type MapFeatures } from '../map/features.ts';
 import type { FlightState } from '../physics/flight-model.ts';
 import type { AircraftEntity } from './entities.ts';
 
@@ -15,7 +15,7 @@ export const SUPPLY_PASS_HEIGHT_M = 150;
 export const SUPPLY_PASS_SPEED_MS = 130;
 export const SUPPLY_PASS_HALF_WIDTH_M = 250;
 export const SUPPLY_PASS_S = 3;
-/** On the wheels this slow counts as stopped; stopped this long on a friendly runway, the jet is repaired too. */
+/** On the wheels this slow counts as stopped; stopped this long on a friendly airfield, the jet is repaired too. */
 export const SUPPLY_STOPPED_MS = 5;
 export const SUPPLY_LANDED_S = 5;
 /** Below this share of fuel a supply pass is worth making for the fuel alone. */
@@ -52,13 +52,20 @@ export function nearestFriendlyAirfield(features: MapFeatures | undefined, team:
   return best;
 }
 
-/** How the jet is taking on supplies now: on a supply pass (or rolling out), stopped on the runway, or not at all. */
+/**
+ * How the jet is taking on supplies now: on a supply pass over the runway; on the wheels anywhere on the airfield's
+ * ground, rolling out (counted as a pass) or stopped; or not at all.
+ */
 export function supplyAt(features: MapFeatures | undefined, team: TeamId, f: FlightState): SupplyKind | null {
   for (const field of features?.airfields ?? []) {
     if (!friendlyAirfield(field, team)) continue;
     const { u, v } = airfieldLocal(field, f.pos.x, f.pos.z);
+    if (f.onGround) {
+      // On the wheels anywhere on the airfield's ground: a jet that has turned off the runway still counts.
+      if (Math.abs(u) > field.lengthM / 2 + AIRFIELD_GROUND_OVERRUN_M || Math.abs(v) > AIRFIELD_GROUND_HALF_WIDTH_M) continue;
+      return Math.hypot(f.vel.x, f.vel.z) <= SUPPLY_STOPPED_MS ? 'landed' : f.airspeed <= SUPPLY_PASS_SPEED_MS ? 'pass' : null;
+    }
     if (Math.abs(u) > field.lengthM / 2 || Math.abs(v) > SUPPLY_PASS_HALF_WIDTH_M) continue;
-    if (f.onGround) return Math.hypot(f.vel.x, f.vel.z) <= SUPPLY_STOPPED_MS ? 'landed' : f.airspeed <= SUPPLY_PASS_SPEED_MS ? 'pass' : null;
     if (f.pos.y - field.elevationM <= SUPPLY_PASS_HEIGHT_M && f.airspeed <= SUPPLY_PASS_SPEED_MS) return 'pass';
   }
   return null;

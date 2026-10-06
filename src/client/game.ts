@@ -279,6 +279,9 @@ export async function startGame(
   let fuelAlert: 'full' | 'bingo' | 'dry' = 'full';
   /** the local jet has neither missiles nor rounds left (revision 22) */
   let weaponsEmpty = false;
+  /** rolling out after a landing, until it stops or flies again (revision 22) */
+  let rollingOut = false;
+  let wasOnGround = false;
   const bufferSize = new Vector2();
   const lead = new Vector3();
   const gunLine = new Vector3();
@@ -587,6 +590,8 @@ export async function startGame(
         } else if (me.flight.onGround) showBanner('CLEARED FOR TAKE-OFF', nowS);
         fuelAlert = 'full';
         weaponsEmpty = false;
+        rollingOut = false;
+        wasOnGround = me.flight.onGround;
       }
       // The gear motor runs as the wheels start to come up, or down on approach (revision 22).
       if (me && me.alive && ((me.flight.gear < 1 && lastGear >= 1) || (me.flight.gear > 0 && lastGear <= 0))) audio?.gearMotor();
@@ -595,6 +600,13 @@ export async function startGame(
       session.update(dt, controls);
       for (const e of session.drainEvents()) handleEvent(e, nowS);
       if (me) stats.sampleFlight(me.alive, me.flight.onGround, me.flight.airspeed, me.flight.gLoad, dt);
+      // A touchdown starts the roll-out; stopping or flying again ends it (revision 22).
+      if (me && me.alive) {
+        const onGround = me.flight.onGround;
+        if (onGround && !wasOnGround) rollingOut = true;
+        if (!onGround || Math.hypot(me.flight.vel.x, me.flight.vel.z) < 5) rollingOut = false;
+        wasOnGround = onGround;
+      }
       // Out of missiles and rounds (revision 22): once, where there is an airfield to rearm at.
       if (me && me.alive && map.features) {
         const empty = me.stores.srm + me.stores.mrm === 0 && me.stores.cannonRounds === 0;
@@ -757,8 +769,8 @@ export async function startGame(
         banner: nowS < bannerUntil ? banner : null,
         hint:
           local.alive && f.onGround
-            ? // Rolling out with the throttle back after a landing (revision 22), else on the take-off run.
-              Math.hypot(f.vel.x, f.vel.z) > 5 && f.throttle < 0.5
+            ? // Rolling out after a landing (revision 22), else on the take-off run.
+              rollingOut
               ? landingHint(settings.current.keys, padFrame.active)
               : takeoffHint(mapper.settings.mode, local.config.hudUnits, settings.current.keys, padFrame.active)
             : `${HINTS[mapper.settings.mode]}${local.bombLoad > 0 ? ' · G bomb' : ''}`,

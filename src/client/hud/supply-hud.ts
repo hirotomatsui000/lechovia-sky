@@ -20,6 +20,8 @@ export const REPAIR_BELOW_SHARE = 0.3;
 /** The approach readouts show this close to a friendly runway and this low above it. */
 export const APPROACH_CUE_RANGE_M = 12000;
 export const APPROACH_CUE_HEIGHT_M = 1500;
+/** This close to the field the marker gives way to the runway outline. */
+const ARRIVED_M = 2000;
 
 /** The way home, for the HUD: the nearest friendly airfield and why to go there. */
 export interface HomeCue {
@@ -61,10 +63,14 @@ export function supplyLimits(units: UnitSystem): { speed: string; height: string
   };
 }
 
-/** The hint line on the roll-out after a landing: brake to a stop on the runway to be repaired. */
+/**
+ * The hint line on the roll-out after a landing: throttle to idle (above about half throttle the engines outpull the
+ * brakes) and brake to a stop on the runway to be repaired.
+ */
 export function landingHint(bindings: Bindings, gamepad: boolean): string {
+  const idle = gamepad ? 'LT' : keyLabel(bindings.throttleDown[0]);
   const brakes = gamepad ? 'D-pad up' : keyLabel(bindings.airbrake[0]);
-  return `LANDED · ${brakes} brakes · stop on the runway to repair, then full power to take off`;
+  return `LANDED · ${idle} throttle to idle · ${brakes} brakes · stop on the runway to repair, then full power to take off`;
 }
 
 const pt: ScreenPoint = { x: 0, y: 0 };
@@ -80,11 +86,13 @@ export function drawSupply(ctx: CanvasRenderingContext2D, p: Projector, f: HudFr
   const v = f.view;
   const home = f.home;
   const units = v.config.hudUnits;
-  if (home && (home.reason || home.near)) {
+  if (home?.near) drawRunway(ctx, p, f, home.field);
+  // Once there (taking on supplies, or over the field) the marker would only clutter the view.
+  const arrived = v.supply !== null || (home !== null && home !== undefined && home.distanceM < ARRIVED_M);
+  if (home && (home.reason || home.near) && !arrived) {
     const field = home.field;
     world.set(field.x, field.elevationM, field.z);
     const label = `${home.reason ? `${REASON_TEXT[home.reason]} · ` : ''}${field.name.toUpperCase()} ${formatRange(home.distanceM, units)}`;
-    if (home.near) drawRunway(ctx, p, f, field);
     if (p.point(f.camera, world, pt)) {
       ctx.save();
       ctx.strokeStyle = PRIMARY;

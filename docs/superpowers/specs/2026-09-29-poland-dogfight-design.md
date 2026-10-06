@@ -651,7 +651,9 @@ The owner asked for a way to fly home and take on missiles and gun rounds again 
 - **Supply pass:** over the runway (its length, within 250 m of the centre line), at most 150 m above it and 130 m/s
   (about 250 kt), for 3 s: missiles (Darts, Lances, or the mode's Lance load), gun rounds and flares back to a fresh
   jet's, and the tanks full. The roll-out after a landing counts the same, below 130 m/s on the runway.
-- **Stopped:** on a friendly runway at under 5 m/s for 5 s, the jet is repaired to full hit points as well.
+- **Stopped:** on the wheels anywhere on a friendly airfield's ground (the runway, its overruns and ±450 m either
+  side, so a jet that has steered off the runway still counts) at under 5 m/s for 5 s, the jet is repaired to full hit
+  points as well. Above about half throttle the engines outpull the brakes, so the roll-out hint says to idle.
 - Each happens once per stay in that state, and only when it would give something (a weapon or flare used, fuel
   under 90%, or for a stop damage), so a runway start or a climb-out over the home field gives nothing. Bombs belong
   to a Strike sortie and are not reloaded. The World emits `resupplied` (with `repaired` after a stop) and exposes
@@ -1041,8 +1043,9 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   HUD outlines the runway and reads out the supply pass, `SUPPLY PASS  SPD 280/250 KT  ALT 820/450 FT` (green once
   met), and then `GEAR DOWN  SINK 640 FT/MIN` (sink amber past 70% of the touchdown limit, red past it). Taking on
   supplies shows `REARMING 60%` or `REPAIRING 60%` with a bar, then a `REARMED · REFUELLED` or `REARMED · REPAIRED`
-  banner and a chime. The gear motor sounds as the gear comes down too. On the roll-out the hint line reads
-  `LANDED · B brakes · stop on the runway to repair, then full power to take off`. The map screen gives the distance
+  banner and a chime. The gear motor sounds as the gear comes down too. From a touchdown until the jet stops or flies
+  again, the hint line reads `LANDED · Z throttle to idle · B brakes · stop on the runway to repair, then full power to
+  take off`. The map screen gives the distance
   to every airfield you can use (`✈ Wilkowo Air Base · 43 km`).
 - **G effects:** red tint below −2.5 G (a third as strong with reduce motion, M5). Revision 21 (`hud/g-vision.ts`), from
   the pilot's G strain (§8): past 0.3 the view turns red (full by halfway to G-LOC), darkness closes in from the

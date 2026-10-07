@@ -1,40 +1,27 @@
-import {
-  BoxGeometry,
-  BufferAttribute,
-  BufferGeometry,
-  CanvasTexture,
-  Color,
-  CylinderGeometry,
-  DoubleSide,
-  Group,
-  InstancedMesh,
-  Matrix4,
-  Mesh,
-  MeshStandardMaterial,
-  type Object3D,
-  PlaneGeometry,
-  Quaternion,
-  SRGBColorSpace,
-  Vector3,
-} from 'three';
+import { BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, CylinderGeometry, DoubleSide, Group, Mesh, MeshStandardMaterial, type Object3D, PlaneGeometry, SRGBColorSpace, Vector3 } from 'three';
 import type { MapDefinition } from '../../../shared/data/maps/map-definition.ts';
-import type { Airfield, Settlement } from '../../../shared/map/features.ts';
+import type { Airfield } from '../../../shared/map/features.ts';
 import type { Terrain } from '../../../shared/map/terrain.ts';
 import { Rng } from '../../../shared/math/rng.ts';
-import { airfieldLayout, airfieldPoint, type Building, type Ground, nameSeed, placeBuildings, roadCells, roadRibbon, runwayNumber } from './feature-layout.ts';
+import { emitStructure } from './buildings/archetypes.ts';
+import { buildingMaterials, setWindowLight } from './buildings/facade-textures.ts';
+import { TownMesh } from './buildings/mesh-builder.ts';
+import { planCastle, planTown, RoadIndex, type Structure, wallHeight } from './buildings/town-plan.ts';
+import { airfieldLayout, airfieldPoint, type Ground, nameSeed, roadRibbon, runwayNumber } from './feature-layout.ts';
 
 /** Settlements and roads disappear beyond these distances (their ground tint and night lights stay). */
 const CITY_RANGE_M = 45000;
 const VILLAGE_RANGE_M = 18000;
+const CASTLE_RANGE_M = 25000;
+/** A town's meshes are built a little each frame, at most this long, so flying toward a city never stutters. */
+const BUILD_BUDGET_MS = 4;
+/** A built town is freed this far beyond its range (a share of it), and built again on the way back. */
+const FREE_MARGIN = 1.25;
 const HIGHWAY_RANGE_M = 30000;
 const LOCAL_ROAD_RANGE_M = 14000;
 const AIRFIELD_RANGE_M = 40000;
 /** Paved surfaces float this far above the flattened ground, clear of depth fighting. */
 const PAVED_LIFT_M = 0.35;
-
-const WALLS = ['#d8d2c4', '#c9c1b0', '#e6e1d6', '#b9b2a4', '#a8a39a', '#d4c9b0'].map((c) => new Color(c));
-const BLOCKS = ['#9a9c9e', '#b0aca4', '#8c8f92', '#c4beb2', '#a39b8e'].map((c) => new Color(c));
-const ROOFS = ['#8b3a2a', '#7a3b2e', '#5c4033', '#6b6b6b', '#9a4a32', '#4f4a45'].map((c) => new Color(c));
 
 /** Night lights of the world, for the environment to show after dusk (M4). */
 export interface NightLights {
@@ -44,29 +31,6 @@ export interface NightLights {
   colors: Float32Array;
 }
 
-/** A unit box from y = 0 to 1, and a unit gable roof (ridge along z) from y = 0 to 1. */
-function unitBox(): BufferGeometry {
-  return new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-}
-
-function unitRoof(): BufferGeometry {
-  const g = new BufferGeometry();
-  // Two sloped faces and two gable ends.
-  const p = [
-    [-0.5, 0, -0.5], [0.5, 0, -0.5], [0, 1, -0.5],
-    [-0.5, 0, 0.5], [0, 1, 0.5], [0.5, 0, 0.5],
-    [-0.5, 0, -0.5], [0, 1, -0.5], [0, 1, 0.5], [-0.5, 0, -0.5], [0, 1, 0.5], [-0.5, 0, 0.5],
-    [0.5, 0, -0.5], [0.5, 0, 0.5], [0, 1, 0.5], [0.5, 0, -0.5], [0, 1, 0.5], [0, 1, -0.5],
-  ].flat();
-  g.setAttribute('position', new BufferAttribute(new Float32Array(p), 3));
-  g.computeVertexNormals();
-  return g;
-}
-
-const BOX = unitBox();
-const ROOF = unitRoof();
-const wallMaterial = new MeshStandardMaterial({ roughness: 0.9 });
-const roofMaterial = new MeshStandardMaterial({ roughness: 0.8 });
 const highwayMaterial = new MeshStandardMaterial({ color: 0x3a3a3c, roughness: 0.92 });
 const localRoadMaterial = new MeshStandardMaterial({ color: 0x5f5a52, roughness: 0.95 });
 const concreteMaterial = new MeshStandardMaterial({ color: 0x8c8a84, roughness: 0.95 });
@@ -80,9 +44,25 @@ interface Ranged {
   range: number;
 }
 
+/** A settlement's buildings: planned at once, built into one mesh per material when the camera comes near. */
+interface Town {
+  name: string;
+  center: Vector3;
+  range: number;
+  plan: readonly Structure[];
+  group: Group | null;
+}
+
+/** Kinds whose windows light up at night, seen from afar as points of light. */
+const LIT_KINDS: ReadonlySet<Structure['kind']> = new Set(['kamienica', 'hanseatic', 'ratusz', 'blok', 'punktowiec', 'kostka', 'house', 'highlander', 'glass-tower', 'palace']);
+/** Tall things that carry a red aviation light on top. */
+const BEACON_KINDS: ReadonlySet<Structure['kind']> = new Set(['chimney', 'cooling-tower', 'palace', 'glass-tower']);
+
 /**
  * Airfields, towns and roads on Lechovia (spec §12.3): runways with markings, taxiways, aprons, hangars and towers;
- * instanced buildings per settlement; road ribbons. Distant ones are hidden. Also collects the night lights.
+ * Polish towns and villages (revision 27: old towns of tenements round a market square, panel-block estates, houses,
+ * churches, industry, the capital's palace and towers, a castle); road ribbons. Distant ones are hidden; a town's
+ * meshes are built when the camera comes within range and freed when it leaves. Also collects the night lights.
  */
 export class WorldFeatures {
   readonly group = new Group();
@@ -90,6 +70,11 @@ export class WorldFeatures {
   readonly runwayLights: NightLights;
   private readonly ranged: Ranged[] = [];
   private readonly textures: CanvasTexture[] = [];
+  private readonly towns: Town[] = [];
+  /** the town whose meshes are being built, and how far through its plan */
+  private building: { town: Town; mesh: TownMesh; next: number } | null = null;
+  /** the first update builds every town in range at once, before the first frame shows */
+  private started = false;
 
   constructor(def: MapDefinition, terrain: Terrain) {
     this.group.name = 'world-features';
@@ -100,18 +85,16 @@ export class WorldFeatures {
     const runwayColors: number[] = [];
     if (features) {
       const ground: Ground = { heightAt: (x, z) => terrain.heightAt(x, z), coverAt: (x, z) => def.landCover(x, z, 0, 0) };
-      const cells = roadCells(features.roads);
+      const roads = new RoadIndex(features.roads);
       for (const s of features.settlements) {
-        const buildings = placeBuildings(s, ground, cells);
-        this.addSettlement(s, buildings);
-        const rng = new Rng(nameSeed(s.name) ^ 0x9e3779b9);
-        for (const b of buildings) {
-          if (rng.next() > (s.kind === 'city' ? 0.8 : 0.6)) continue;
-          city.push(b.x + rng.range(-3, 3), b.y + Math.min(b.height, 4 + rng.range(0, b.height - 4)), b.z + rng.range(-3, 3));
-          const warm = rng.next();
-          cityColors.push(1, 0.72 + 0.2 * warm, 0.4 + 0.35 * warm);
-        }
+        const plan = planTown(s, ground, roads);
+        this.addTown(s.name, s.x, s.z, ground.heightAt(s.x, s.z), s.kind === 'city' ? CITY_RANGE_M : VILLAGE_RANGE_M, plan);
+        townLights(plan, new Rng(nameSeed(s.name) ^ 0x9e3779b9), s.kind === 'city' ? 0.8 : 0.6, city, cityColors);
       }
+      // The castle by the river near the coastal city.
+      const coast = features.settlements.find((s) => s.name === 'Morzysko');
+      const castle = coast ? planCastle(coast, ground, roads) : null;
+      if (castle) this.addTown('castle', castle.x, castle.z, castle.y, CASTLE_RANGE_M, [castle]);
       for (const road of features.roads) {
         const ribbon = roadRibbon(road, ground, road.kind === 'highway' ? 12 : 6);
         this.addRoad(ribbon, road.kind === 'highway');
@@ -130,60 +113,98 @@ export class WorldFeatures {
     this.runwayLights = { positions: new Float32Array(runway), colors: new Float32Array(runwayColors) };
   }
 
-  /** Hides features far from the camera. */
+  /** Hides features far from the camera; builds the towns it comes near, a little each frame, and frees those left behind. */
   update(camera: Vector3): void {
     for (const r of this.ranged) r.object.visible = r.center.distanceToSquared(camera) < r.range * r.range;
+    for (const t of this.towns) {
+      if (!t.group) continue;
+      const d2 = t.center.distanceToSquared(camera);
+      t.group.visible = d2 < t.range * t.range;
+      if (d2 > (t.range * FREE_MARGIN) ** 2) this.free(t);
+    }
+    const until = this.started ? performance.now() + BUILD_BUDGET_MS : Infinity;
+    this.started = true;
+    while (performance.now() < until) {
+      if (!this.building) {
+        const town = this.nearestUnbuilt(camera);
+        if (!town) return;
+        this.building = { town, mesh: new TownMesh(town.center.x, town.center.z), next: 0 };
+      }
+      const b = this.building;
+      if (b.town.center.distanceToSquared(camera) > (b.town.range * FREE_MARGIN) ** 2) {
+        // Flown away from before it was finished.
+        this.building = null;
+        continue;
+      }
+      const plan = b.town.plan;
+      while (b.next < plan.length && performance.now() < until) {
+        for (const end = Math.min(plan.length, b.next + 24); b.next < end; b.next++) emitStructure(b.mesh, plan[b.next]);
+      }
+      if (b.next < plan.length) return;
+      this.finish(b.town, b.mesh);
+      this.building = null;
+    }
+  }
+
+  /** Lights the windows after dusk: `night` 0 by day … 1 at night. */
+  setNight(night: number): void {
+    setWindowLight(night);
   }
 
   dispose(): void {
+    // The building materials are shared by every town on the page and stay; their meshes' geometry goes.
     this.group.traverse((o) => {
-      if (o instanceof Mesh && o.geometry !== BOX && o.geometry !== ROOF) o.geometry.dispose();
-      if (o instanceof InstancedMesh) o.dispose();
+      if (o instanceof Mesh) o.geometry.dispose();
     });
     for (const t of this.textures) t.dispose();
+    for (const t of this.towns) t.group = null;
+    this.building = null;
     this.group.clear();
+  }
+
+  private addTown(name: string, x: number, z: number, y: number, range: number, plan: readonly Structure[]): void {
+    if (plan.length === 0) return;
+    this.towns.push({ name, center: new Vector3(x, y, z), range, plan, group: null });
+  }
+
+  private nearestUnbuilt(camera: Vector3): Town | null {
+    let best: Town | null = null;
+    let bestD2 = Infinity;
+    for (const t of this.towns) {
+      if (t.group) continue;
+      const d2 = t.center.distanceToSquared(camera);
+      if (d2 < t.range * t.range && d2 < bestD2) {
+        best = t;
+        bestD2 = d2;
+      }
+    }
+    return best;
+  }
+
+  private finish(town: Town, mesh: TownMesh): void {
+    const group = new Group();
+    group.name = `town-${town.name}`;
+    const materials = buildingMaterials();
+    for (const [key, geometry] of mesh.geometries()) {
+      const part = new Mesh(geometry, materials[key]);
+      part.name = `${group.name}-${key}`;
+      group.add(part);
+    }
+    group.position.set(town.center.x, 0, town.center.z);
+    this.group.add(group);
+    town.group = group;
+  }
+
+  private free(town: Town): void {
+    if (!town.group) return;
+    for (const part of town.group.children) if (part instanceof Mesh) part.geometry.dispose();
+    this.group.remove(town.group);
+    town.group = null;
   }
 
   private track(object: Object3D, x: number, y: number, z: number, range: number): void {
     this.group.add(object);
     this.ranged.push({ object, center: new Vector3(x, y, z), range });
-  }
-
-  private addSettlement(s: Settlement, buildings: readonly Building[]): void {
-    if (buildings.length === 0) return;
-    const town = new Group();
-    town.name = `town-${s.name}`;
-    const walls = new InstancedMesh(BOX, wallMaterial, buildings.length);
-    const pitched = buildings.filter((b) => b.roof === 'pitched');
-    const roofs = new InstancedMesh(ROOF, roofMaterial, Math.max(1, pitched.length));
-    const m = new Matrix4();
-    const q = new Quaternion();
-    const up = new Vector3(0, 1, 0);
-    const pos = new Vector3();
-    const scale = new Vector3();
-    const sink = 3;
-    let r = 0;
-    buildings.forEach((b, i) => {
-      q.setFromAxisAngle(up, b.angle);
-      // Walls reach a little into the ground so slopes never show a gap under them.
-      m.compose(pos.set(b.x - s.x, b.y - sink, b.z - s.z), q, scale.set(b.width, b.height + sink, b.depth));
-      walls.setMatrixAt(i, m);
-      const palette = b.roof === 'flat' ? BLOCKS : WALLS;
-      walls.setColorAt(i, palette[Math.floor(b.tint * palette.length) % palette.length]);
-      if (b.roof === 'pitched') {
-        m.compose(pos.set(b.x - s.x, b.y + b.height, b.z - s.z), q, scale.set(b.width + 0.6, b.width * 0.42, b.depth + 0.6));
-        roofs.setMatrixAt(r, m);
-        roofs.setColorAt(r, ROOFS[Math.floor(b.tint * 7.31 * ROOFS.length) % ROOFS.length]);
-        r++;
-      }
-    });
-    roofs.count = r;
-    walls.computeBoundingSphere();
-    roofs.computeBoundingSphere();
-    town.add(walls);
-    if (r > 0) town.add(roofs);
-    town.position.set(s.x, 0, s.z);
-    this.track(town, s.x, buildings[0].y, s.z, s.kind === 'city' ? CITY_RANGE_M : VILLAGE_RANGE_M);
   }
 
   private addRoad(ribbon: Float32Array, highway: boolean): void {
@@ -318,5 +339,30 @@ export class WorldFeatures {
     texture.anisotropy = 8;
     this.textures.push(texture);
     return new MeshStandardMaterial({ map: texture, roughness: 0.9 });
+  }
+}
+
+/** Night lights of a town's buildings: one in most lit buildings (two in the big ones), red beacons on the tall. */
+function townLights(plan: readonly Structure[], rng: Rng, share: number, positions: number[], colors: number[]): void {
+  for (const b of plan) {
+    const h = wallHeight(b);
+    if (BEACON_KINDS.has(b.kind)) {
+      positions.push(b.x, b.y + h + (b.kind === 'palace' ? 0 : 1), b.z);
+      colors.push(1, 0.12, 0.08);
+    }
+    if (!LIT_KINDS.has(b.kind) || b.kind === 'palace') continue;
+    const n = b.w * b.d > 900 ? 2 : 1;
+    for (let k = 0; k < n; k++) {
+      if (rng.next() > share) continue;
+      const along = rng.range(-0.45, 0.45) * b.w;
+      const c = Math.cos(b.angle);
+      const sn = Math.sin(b.angle);
+      // On the front, at a random storey.
+      const ax = along * c + (b.d / 2 + 0.5) * sn;
+      const az = along * sn - (b.d / 2 + 0.5) * c;
+      positions.push(b.x + ax, b.y + Math.min(h - 1, 2 + rng.range(0, Math.max(0, h - 3))), b.z + az);
+      const warm = rng.next();
+      colors.push(1, 0.72 + 0.2 * warm, 0.4 + 0.35 * warm);
+    }
   }
 }

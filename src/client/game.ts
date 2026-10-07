@@ -724,6 +724,7 @@ export async function startGame(
     // In cloud or not goes by the jet the camera follows (revision 25).
     const subject = local && local.alive ? local.position : watched && watched.alive ? watched.position : null;
     environment.update(session.hour(), renderer.camera, active ? dt : 0, subject);
+    worldFeatures.setNight(environment.night);
     particleFrame.fogColor.copy(environment.fog.color);
     particleFrame.fogDensity = environment.fog.density;
     // Free Flight can change the weather, and the wind with it.

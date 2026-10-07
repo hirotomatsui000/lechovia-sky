@@ -1,4 +1,4 @@
-# Lechovia Skies — Design Spec (revision 26)
+# Lechovia Skies — Design Spec (revision 27)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -93,6 +93,11 @@
     Pilot levels from the career records open the jets one at a time (§15.5). The way home shows from 40 gun rounds
     left (§15.2). With a runway start the AI pilots start on their runways too and take off with the player, then come
     back in the air (§13, §14). The map screen has a compass rose and N, E, S and W on its edges (§15.5).
+  - Revision 27 (2026-10-07): at the owner's request ("really realistic Polish buildings") the towns are Polish towns:
+    old towns of tenements round a market square with the town hall and a brick Gothic church, panel-block estates,
+    detached houses, street villages with barns, highlander houses in the mountains, industry, the capital's palace
+    tower and glass towers, and a brick castle, built from textured, merged meshes with windows that light at night
+    (§12.3, §18).
 - **Owner:** Hiroto Matsui
 - **Title:** Lechovia Skies (`lechovia-skies`); the working title until revision 19 was Contested Skies.
 
@@ -747,8 +752,8 @@ The owner asked for a way to fly home and take on missiles and gun rounds again 
 - Combat area: 85 km radius around the centre. Airborne spawn lines 15 km either side of the capital at 5,000 m.
 - Rendering: 64-cell chunks at six levels, chosen by distance (graphics preset: split at 1.1, 1.4 or 1.8 chunk
   widths), skirts against cracks, parents shown until all children are built, an outer ring that stretches the map's
-  edges to the horizon. Towns get instanced houses and blocks on their urban ground (about 12,000 in all), roads are
-  ribbons that bridge rivers, and the terrain shader tints towns and marshes.
+  edges to the horizon. Roads are ribbons that bridge rivers, and the terrain shader tints towns and marshes. Towns:
+  see Polish towns below (revision 27; until then, about 12,000 instanced boxes with gable-roof caps).
 - Sky: the Preetham model scaled to the scene's brightness (brighter while the sun is low), lighting the scene through
   an environment map rebuilt whenever the sun has moved 1.5°; haze takes the sky's horizon colour; stars, a full moon
   opposite the sun, moonlight and a dim night ambient; exposure rises at night. Revision 19 (the owner found dusk and
@@ -772,6 +777,51 @@ The owner asked for a way to fly home and take on missiles and gun rounds again 
   share. Training, tests and the balance tournament fly in still air (`EnvironmentSettings.calm`). Smoke, fire and
   contrails drift with the wind; the clouds stay put.
 
+- **Polish towns (revision 27, `src/client/render/world/buildings/`):** at the owner's request ("really realistic
+  Polish buildings"). About 13,000 buildings, the same every time, all on town ground (barns also on fields), clear of
+  the roads by their kerbs (an exact footprint test against every road segment) and of each other.
+  - **Plan (`town-plan.ts`, pure, tested):**
+    - Every city has an old town (Stare Miasto): a grid of 92 × 72 m perimeter blocks with 16 m streets. Tenements
+      (kamienice, 9–15 m wide, three to six storeys) stand wall to wall round each block. The market square (rynek),
+      paved in granite setts over the lie of the ground, has the town hall (ratusz) in it, with a 52 m tower (64 m
+      in the capital). A brick Gothic church stands on the block at its corner, its nave east–west, two unequal
+      towers (82 and 69 m) in the bigger cities. Morzysko, the port, has narrow Hanseatic houses with stepped gables
+      to the street.
+    - In a ring round the old town are estates (osiedla) of panel blocks: four- and five-storey slabs 60–110 m long,
+      ten- and eleven-storey slabs, and point towers of 14–17 storeys, in parallel rows.
+    - Toward the edge, suburbs of detached houses: the grey "Polish cube" (kostka) with a low hip roof, and newer
+      plastered houses with steep tiled roofs.
+    - On the edge, an industrial zone: halls with roof lights and red-and-white chimneys. Odrzyn has a power station
+      with a 260 m chimney and two 125 m cooling towers.
+    - Lechów, the capital, also has a palace-of-culture tower (231 m, stepped, with pinnacles and a spire) about a
+      kilometre from its old town, with ten glass towers of 96–230 m round it.
+    - Villages are street villages (ulicówka): farmhouses facing the road with barns behind, and a white church with
+      a baroque helmet. Above 280 m they are highlander villages: timber houses under steep shingle roofs and a
+      wooden church; Skalnik's outskirts are highlander too.
+    - A red-brick castle (curtain walls, corner and gate towers, the high castle and its keep) stands by the river a
+      few kilometres from Morzysko.
+  - **Look (`facade-textures.ts`, `archetypes.ts`):**
+    - Canvas textures painted at real scale (metres per repeat):
+      - tenement fronts with window surrounds and pilasters, and shop fronts;
+      - panel-block storeys of PVC windows and loggias;
+      - house walls; Gothic brick with lancet windows; plain brick; sandstone ashlar; curtain-wall glass;
+      - metal cladding; boards; logs; white plaster with arched windows;
+      - roof tiles, shingle, roofing sheet, flat roofs, concrete and the squares' setts.
+    - Colours come per vertex: pastel tenements under red tiles; white, cream or pastel blocks with a coloured stripe
+      at the staircases; grey cubes; copper-green spires and helmets.
+    - Each facade with windows has a second canvas of lit windows (warm and cool, some dark) as its emissive map. It
+      fades in as night falls (`setWindowLight`).
+  - **Meshes (`mesh-builder.ts`, `world-features.ts`):**
+    - Each town is built into one flat-shaded, non-indexed mesh per material, 18 materials at most. Positions are
+      relative to the town's centre. Walls reach 3 m into the ground.
+    - A town is built when the camera comes within 45 km of a city, 18 km of a village or 25 km of the castle. It is
+      built a little each frame (4 ms at most; the first frame builds everything in range at once). It is freed 25%
+      beyond that distance.
+    - Lechów is about 2,350 buildings and 270,000 vertices, and takes about 235 ms to build (spread over frames). All
+      towns together are 1.15 M vertices, but only those in range are ever built.
+  - **Night lights:** town lights come from the plan, one in most lit buildings (two in the big ones), on the front
+    at a random storey. Chimneys, cooling towers, the palace and the glass towers carry a red light on top.
+
 - **Geography inspired by Poland:**
   - **North:** a sea coast with beaches, a sand spit and a lagoon.
   - **Northeast:** a lake district of forested moraine hills and dozens of lakes.
@@ -788,7 +838,7 @@ The owner asked for a way to fly home and take on missiles and gun rounds again 
 - **Rendering:**
   - Terrain shading: strip fields, forests, urban tint, rock and snow on high slopes.
   - Water: the sea plane; rivers and lakes via water-flagged terrain vertices.
-  - Settlements: instanced buildings per settlement.
+  - Settlements: instanced buildings per settlement (revision 27: Polish towns, see above).
   - Roads: ribbons.
 - **Weather presets:** clear, scattered, broken, overcast (+ light rain). They drive cloud-layer coverage and altitude,
   fog density and light. Clouds block visual detection and IR locks.
@@ -1301,6 +1351,7 @@ Removed in revision 14, with §7.
 |---|---|
 | Client frame | 60 fps at 1080p on a 2020+ laptop; < 400 draw calls; < 2 M triangles |
 | Terrain chunk build (worker, M4) | < 4 ms per chunk (measured 1.9 ms) |
+| Town mesh build (revision 27) | ≤ 4 ms of a frame, spread over frames; Lechów (270 k vertices) about 235 ms in all; one draw call per material per town |
 | World step | < 2 ms with 32 aircraft (server and local); M5 measured 0.34–0.50 ms on average with 32 bots (36 aircraft with the Sentinels) on Lechovia |
 | Network per client | ≤ 50 KB/s down, ≤ 1 KB/s up |
 | Initial download | < 5 MB (maps are generated from seeds, not downloaded); the single-file build is 5.4 MB in M5, the multi-file build splits it and the browser caches the pieces |

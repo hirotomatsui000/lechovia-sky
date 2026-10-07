@@ -196,6 +196,7 @@ export class Showcase {
     const frameS = this.lastFrameMs === 0 ? 0 : Math.min(0.1, (now - this.lastFrameMs) / 1000);
     this.lastFrameMs = now;
     this.environment?.update(this.settings.startHour, camera, this.still ? 0 : frameS);
+    if (this.environment) this.features?.setNight(this.environment.night);
     const w = window.innerWidth;
     const h = window.innerHeight;
     if (w >= WIDE_LAYOUT_PX) camera.setViewOffset(w, h, -w * FRAME_SHIFT, 0, w, h);

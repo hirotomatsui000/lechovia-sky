@@ -11,6 +11,12 @@ is rebuilt after every push ([Publish as a website](#publish-as-a-website)). The
 **Current milestone: M5 "Modes & polish"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
 "Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02: the game is
 single player against AI pilots and runs entirely in the browser.
+- **Polish towns** (2026-10-07): the cities have old towns of pastel tenements round a market square with the town
+  hall and a red-brick Gothic church, estates of panel blocks, streets of houses, and factories with striped chimneys;
+  the capital has its palace-of-culture tower and glass towers, the port its Hanseatic gables, Odrzyn a power station
+  with cooling towers, and there is a brick castle by the river near the coast. Villages line their road with
+  farmhouses, barns and a white church; in the mountains they are timber with a wooden church. Windows light up at
+  night.
 - **Levels** (2026-10-07): every match earns experience (more for a win, each kill and Sentinel), and levels open the
   jets one at a time: Kestrel and Kobchik from the start, Shade at level 7. Matches already on record count.
 - **Take off together** (2026-10-07): with a runway start, the AI pilots start on their runways and take off with you.

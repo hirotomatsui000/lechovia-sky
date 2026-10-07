@@ -1,93 +1,17 @@
-import type { Airfield, Road, Settlement } from '../../../shared/map/features.ts';
+import type { Airfield, Road } from '../../../shared/map/features.ts';
 import { airfieldWorld } from '../../../shared/map/features.ts';
 import type { LandCover } from '../../../shared/map/land-cover.ts';
-import { Rng } from '../../../shared/math/rng.ts';
 
 export interface Ground {
   heightAt(x: number, z: number): number;
   coverAt(x: number, z: number): LandCover;
 }
 
-/** One building: footprint, height and orientation; `roof` is pitched (houses) or flat (blocks). */
-export interface Building {
-  x: number;
-  y: number;
-  z: number;
-  width: number;
-  depth: number;
-  height: number;
-  angle: number;
-  roof: 'pitched' | 'flat';
-  /** 0 … 1 picks the wall and roof colours */
-  tint: number;
-}
-
-/** Road cells are this wide when keeping buildings off the roads. */
-const ROAD_CELL_M = 40;
-
 /** A stable seed from a name. */
 export function nameSeed(name: string): number {
   let h = 2166136261;
   for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619);
   return h >>> 0;
-}
-
-/** Cells that roads pass through, so buildings stay off them. */
-export function roadCells(roads: readonly Road[]): Set<string> {
-  const cells = new Set<string>();
-  for (const r of roads) {
-    for (let p = 0; p + 3 < r.points.length; p += 2) {
-      const [ax, az, bx, bz] = [r.points[p], r.points[p + 1], r.points[p + 2], r.points[p + 3]];
-      const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / (ROAD_CELL_M / 2)));
-      for (let s = 0; s <= n; s++) {
-        const x = ax + ((bx - ax) * s) / n;
-        const z = az + ((bz - az) * s) / n;
-        cells.add(`${Math.floor(x / ROAD_CELL_M)},${Math.floor(z / ROAD_CELL_M)}`);
-      }
-    }
-  }
-  return cells;
-}
-
-/** How many buildings a settlement gets: the capital is densest, villages a few dozen houses. */
-export function buildingCount(s: Settlement): number {
-  if (s.kind === 'village') return Math.round(30 + s.radiusM / 12);
-  return Math.round((s.capital ? 2600 : 1300) * (s.radiusM / (s.capital ? 5500 : 3500)) ** 2);
-}
-
-/**
- * Buildings for a settlement on its urban ground, never on water or a road. Cities get tall blocks near the centre and
- * houses further out; villages get houses with pitched roofs. Deterministic per settlement name.
- */
-export function placeBuildings(s: Settlement, ground: Ground, roads: Set<string>): Building[] {
-  const rng = new Rng(nameSeed(s.name));
-  const count = buildingCount(s);
-  const out: Building[] = [];
-  for (let attempt = 0; attempt < count * 4 && out.length < count; attempt++) {
-    // Denser toward the centre.
-    const r = s.radiusM * Math.pow(rng.next(), 0.75);
-    const a = rng.range(0, 2 * Math.PI);
-    const x = s.x + Math.cos(a) * r;
-    const z = s.z + Math.sin(a) * r;
-    if (ground.coverAt(x, z) !== 'urban') continue;
-    if (roads.has(`${Math.floor(x / ROAD_CELL_M)},${Math.floor(z / ROAD_CELL_M)}`)) continue;
-    const central = 1 - r / s.radiusM;
-    const block = s.kind === 'city' && rng.next() < 0.25 + 0.7 * central;
-    const height = block ? rng.range(12, 22) + (s.capital ? 45 : 22) * central * central * rng.next() : rng.range(5, 8);
-    out.push({
-      x,
-      y: ground.heightAt(x, z),
-      z,
-      width: block ? rng.range(18, 40) : rng.range(8, 13),
-      depth: block ? rng.range(12, 22) : rng.range(7, 10),
-      height,
-      // Streets in a city run on a loose grid; village houses face the road at any angle.
-      angle: s.kind === 'city' ? Math.round(rng.range(0, 4)) * (Math.PI / 2) + rng.range(-0.08, 0.08) : rng.range(0, Math.PI),
-      roof: block ? 'flat' : 'pitched',
-      tint: rng.next(),
-    });
-  }
-  return out;
 }
 
 /**

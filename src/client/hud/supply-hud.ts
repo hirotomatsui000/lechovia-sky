@@ -15,6 +15,8 @@ import type { Projector, ScreenPoint } from './projector.ts';
 /** Why the HUD points the way home (revision 22): weapons to reload, fuel to take on, or damage to repair. */
 export type RtbReason = 'rearm' | 'fuel' | 'repair';
 
+/** The way home shows once the gun is down to this many rounds (revision 26, at the owner's request; it was 0). */
+export const REARM_ROUNDS = 40;
 /** Badly damaged below this share of hit points: worth landing to repair. */
 export const REPAIR_BELOW_SHARE = 0.3;
 /** The approach readouts show this close to a friendly runway and this low above it. */
@@ -36,7 +38,7 @@ export interface HomeCue {
 export function rtbReason(v: AircraftView): RtbReason | null {
   if (!v.alive || v.config.support) return null;
   const s = v.stores;
-  if (s.srm + s.mrm === 0 || s.cannonRounds === 0) return 'rearm';
+  if (s.srm + s.mrm === 0 || s.cannonRounds <= REARM_ROUNDS) return 'rearm';
   if (s.fuelKg < BINGO_SHARE * v.config.physics.fuelKg) return 'fuel';
   if (v.hp < REPAIR_BELOW_SHARE * v.config.damage.hitPoints) return 'repair';
   return null;

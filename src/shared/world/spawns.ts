@@ -36,11 +36,24 @@ export function spawnFlightState(spec: SpawnSpec, terrain: Terrain, slot: number
 export type SpawnStart = 'air' | 'runway';
 export const SPAWN_STARTS: readonly SpawnStart[] = ['air', 'runway'];
 
-/** Runway starts line up in two lanes 12 m either side of the centre line, rows 300 m apart from the threshold. */
+/**
+ * Runway starts: the first jet of a team (the player's, or the lead's) on the centre line at the threshold; the rest
+ * behind it in rows 300 m apart, two to a row 12 m either side of the centre line. Revision 26: the first jet used to
+ * stand in the left lane, so the player started off to the left of the runway.
+ */
 export const RUNWAY_LANE_OFFSET_M = 12;
 export const RUNWAY_ROW_SPACING_M = 300;
 const RUNWAY_THRESHOLD_M = 150;
 const RUNWAY_ROWS = 6;
+/** Slots on one runway before they start again at the threshold. */
+const RUNWAY_SLOTS = 1 + 2 * (RUNWAY_ROWS - 1);
+
+/** Where runway slot `slot` stands: `row` from the threshold and `lane` to the right of the centre line, metres. */
+export function runwaySlot(slot: number): { row: number; lane: number } {
+  const s = slot % RUNWAY_SLOTS;
+  if (s === 0) return { row: 0, lane: 0 };
+  return { row: Math.ceil(s / 2), lane: s % 2 === 1 ? -RUNWAY_LANE_OFFSET_M : RUNWAY_LANE_OFFSET_M };
+}
 /** Full military power: the jet rolls at once; the pilot adds afterburner or brakes. */
 const RUNWAY_THROTTLE = 0.9;
 
@@ -51,8 +64,7 @@ export function teamAirfield(map: MapDefinition, team: TeamId): Airfield | null 
 
 /** A jet standing on the runway at its slot, gear down, facing the take-off direction. */
 export function runwayFlightState(field: Airfield, slot: number): FlightState {
-  const lane = slot % 2 === 0 ? -RUNWAY_LANE_OFFSET_M : RUNWAY_LANE_OFFSET_M;
-  const row = Math.floor(slot / 2) % RUNWAY_ROWS;
+  const { row, lane } = runwaySlot(slot);
   const { x, z } = airfieldWorld(field, -field.lengthM / 2 + RUNWAY_THRESHOLD_M + row * RUNWAY_ROW_SPACING_M, lane);
   return createFlightState({
     position: new Vector3(x, restingHeight(field.elevationM), z),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LAND_COVERS } from '../../shared/map/land-cover.ts';
-import { MAP_COLORS, mapToPixel, shadedColor } from './map-screen.ts';
+import { cardinalMarks, MAP_COLORS, mapToPixel, shadedColor } from './map-screen.ts';
 
 describe('map screen (M4)', () => {
   it('puts the map centre in the middle of the image and north at the top', () => {
@@ -26,5 +26,23 @@ describe('map screen picking (M5)', () => {
     expect(pickPoint(def, 0.75, 0.25)).toEqual({ x: 25000, z: -25000, airfield: null });
     const near = pickPoint(def, 0.5 + (20000 + AIRFIELD_PICK_M / 2) / 100000, 0.5 - 0.1);
     expect(near).toEqual({ x: 20000, z: -10000, airfield: 'Test Field' });
+  });
+});
+
+describe('the map compass (revision 26)', () => {
+  it('puts north at the top, east on the right, south at the bottom and west on the left, as the map is drawn', () => {
+    const px = 1000;
+    const marks = Object.fromEntries(cardinalMarks(px, 1).map((m) => [m.label, m]));
+    // A point far north on the map is drawn near the top, one far east near the right.
+    const north = mapToPixel(0, -40000, 100000, px);
+    const east = mapToPixel(40000, 0, 100000, px);
+    expect(north.v).toBeLessThan(px / 2);
+    expect(east.u).toBeGreaterThan(px / 2);
+    expect(marks.N.v).toBeLessThan(px * 0.1);
+    expect(marks.S.v).toBeGreaterThan(px * 0.9);
+    expect(marks.E.u).toBeGreaterThan(px * 0.9);
+    expect(marks.W.u).toBeLessThan(px * 0.1);
+    expect(marks.N.u).toBe(px / 2);
+    expect(marks.S.u).toBe(px / 2);
   });
 });

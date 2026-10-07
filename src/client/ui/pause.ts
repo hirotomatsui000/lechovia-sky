@@ -1,3 +1,5 @@
+import { fullscreenButton } from './fullscreen.ts';
+
 export interface PauseHandlers {
   onResume(): void;
   onSettings(): void;
@@ -13,6 +15,7 @@ export interface PauseOptions {
 export class PauseMenu {
   private readonly overlay = document.createElement('div');
   private readonly extra: PauseOptions['extra'];
+  private readonly fullscreen = fullscreenButton('button secondary');
 
   constructor(root: HTMLElement, handlers: PauseHandlers, options: PauseOptions = {}) {
     this.extra = options.extra;
@@ -27,6 +30,7 @@ export class PauseMenu {
     panel.append(
       this.button('Resume', 'button', () => handlers.onResume()),
       this.button('Settings', 'button secondary', () => handlers.onSettings()),
+      this.fullscreen.button,
       this.button('Quit to menu', 'button secondary', () => handlers.onQuit()),
     );
     if (options.extra) panel.appendChild(options.extra.element);
@@ -48,6 +52,7 @@ export class PauseMenu {
   }
 
   dispose(): void {
+    this.fullscreen.dispose();
     this.overlay.remove();
   }
 

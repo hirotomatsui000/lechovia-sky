@@ -7,7 +7,7 @@ import { clamp, DEG } from '../math/units.ts';
 import { cornerSpeed } from '../physics/aero.ts';
 import { type AirData, atmosphere } from '../physics/atmosphere.ts';
 import type { ControlInput } from '../physics/controls.ts';
-import type { FlightState } from '../physics/flight-model.ts';
+import { type FlightState, headingRad } from '../physics/flight-model.ts';
 import { incomingMissileWarning, type MissileWarning } from '../targeting/warnings.ts';
 import type { SteadyWind } from '../physics/wind.ts';
 import { predictImpact } from '../weapons/bomb.ts';
@@ -35,6 +35,14 @@ export interface BotWorld {
   readonly wind: SteadyWind;
 }
 
+/**
+ * Take-off from a runway start (revision 26): full afterburner down the centre line, the nose up from this airspeed,
+ * then straight ahead at this climb with the wings level until this high above the ground.
+ */
+const ROTATE_MS = 72;
+const ROTATE_PITCH = 0.8;
+const CLIMB_OUT_RAD = 12 * DEG;
+const CLIMB_OUT_TO_M = 300;
 const GROUND_HORIZON_S = 5;
 const GROUND_MARGIN_M = 150;
 const RECOVERY_CLIMB_RAD = 30 * DEG;
@@ -150,6 +158,10 @@ export class BotPilot {
   private readonly right = new Vector3();
   private readonly upAxis = new Vector3();
   private lastSpawnGen = -1;
+  /** taking off from a runway start: the spawn it began with, and the runway heading */
+  private departureGen = -1;
+  private departing = false;
+  private departureHeading = 0;
   /** this tick's stick is a missile break or a pull away from the ground (G management, revision 21) */
   private urgent = false;
   /** a support aircraft the bot wants designated: it presses "next target" next tick */
@@ -215,6 +227,7 @@ export class BotPilot {
     if (!warning) this.impactJudgement.clear();
     out.countermeasures = impactS <= FLARES_FROM_S && this.decideFlares(world, self);
 
+    if (this.depart(world, self, out)) return;
     if (this.avoidGround(world, self.flight, out)) {
       this.urgent = true;
       return;
@@ -315,6 +328,35 @@ export class BotPilot {
     if (self.stores.countermeasures <= 0 || world.tick < this.nextFlareDecisionTick) return false;
     this.nextFlareDecisionTick = world.tick + Math.ceil(COUNTERMEASURES.minIntervalS * world.tickRate);
     return this.rng.next() < this.profile.countermeasureDiscipline;
+  }
+
+  /**
+   * From a runway start (revision 26): the take-off roll on the centre line, rotation at flying speed, and a straight
+   * climb-out to a safe height. Nothing else (no turning after a target) until then.
+   */
+  private depart(world: BotWorld, self: AircraftEntity, out: ControlInput): boolean {
+    const f = self.flight;
+    if (self.spawnGen !== this.departureGen) {
+      this.departureGen = self.spawnGen;
+      this.departing = f.onGround;
+      this.departureHeading = headingRad(f);
+    }
+    if (!this.departing) return false;
+    if (!f.onGround && f.pos.y - world.terrain.surfaceAt(f.pos.x, f.pos.z) > CLIMB_OUT_TO_M) {
+      this.departing = false;
+      return false;
+    }
+    out.throttle = 1;
+    if (f.onGround) {
+      out.roll = 0;
+      out.yaw = 0;
+      out.pitch = f.airspeed >= ROTATE_MS ? ROTATE_PITCH : 0;
+      return true;
+    }
+    const h = this.departureHeading;
+    this.desired.set(Math.sin(h), Math.tan(CLIMB_OUT_RAD), -Math.cos(h)).normalize();
+    this.fly(f, this.desired, 0.6, 1, out);
+    return true;
   }
 
   private avoidGround(world: BotWorld, f: FlightState, out: ControlInput): boolean {

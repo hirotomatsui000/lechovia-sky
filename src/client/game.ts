@@ -28,7 +28,7 @@ import { bombCue, releaseCue, TargetAlerts, targetDestroyedText } from './hud/st
 import { formatClock, formatTimeOfDay, speedLabel, speedValue } from './hud/format.ts';
 import { sentinelDownText, zoneEventText, zoneFeedText } from './hud/objective-hud.ts';
 import { BINGO_SHARE, spinHint } from './hud/flight-warnings.ts';
-import { homeCue, landingHint } from './hud/supply-hud.ts';
+import { homeCue, landingHint, REARM_ROUNDS } from './hud/supply-hud.ts';
 import { takeoffHint } from './hud/takeoff.ts';
 import { trainingPrompt } from './hud/training-prompts.ts';
 import { BASE_MOUSE_SENSITIVITY, ControlMapper, type ControlMode } from './input/control-mapper.ts';
@@ -57,6 +57,7 @@ import { DebugOverlay } from './ui/debug-overlay.ts';
 import { matchResult, type ResultRow, showEndScreen } from './ui/end-screen.ts';
 import { MatchStats } from './match-stats.ts';
 import { loadCareer, recordMatch, saveCareer } from './career.ts';
+import { careerXp, isUnlocked, levelForXp, progressionLines } from './progression.ts';
 import { deathText, respawnText } from './death-text.ts';
 import { campaignOutcome, campaignStart, missionHeading } from './campaign/flow.ts';
 import { missionById } from './campaign/missions.ts';
@@ -283,6 +284,7 @@ export async function startGame(
   let fuelAlert: 'full' | 'bingo' | 'dry' = 'full';
   /** the local jet has neither missiles nor rounds left (revision 22) */
   let weaponsEmpty = false;
+  let gunLow = false;
   /** rolling out after a landing, until it stops or flies again (revision 22) */
   let rollingOut = false;
   let wasOnGround = false;
@@ -327,6 +329,9 @@ export async function startGame(
   const forward = new Vector3();
   const upward = new Vector3();
   const canChangeJet = options.mission !== 'training';
+  // The jets to change to: those open at the pilot's level (revision 26), and the one this match started with.
+  const pilotLevel = levelForXp(careerXp(loadCareer()));
+  const changeableJets = (team: TeamId) => listAircraft(team).filter((j) => j.id === options.aircraftId || isUnlocked(j.id, pilotLevel));
 
   const pause = new PauseMenu(root, {
     onResume: () => {
@@ -494,7 +499,8 @@ export async function startGame(
     // Career records (revision 17): every finished match but Training goes into this browser's records.
     const bests: string[] = [];
     if (me && mine && !training) {
-      const { career, newBests } = recordMatch(loadCareer(), {
+      const before = loadCareer();
+      const { career, newBests } = recordMatch(before, {
         at: new Date().toISOString(),
         mode: options.mission,
         aircraftId: me.config.id,
@@ -516,6 +522,8 @@ export async function startGame(
         difficulty: options.difficulty,
       });
       saveCareer(career);
+      // Experience and levels (revision 26).
+      bests.push(...progressionLines(before, career));
       if (career.matches === 1) bests.push('First match on record · see Records on the title screen');
       for (const id of newBests) bests.push(`New best · ${bestLine(id, career.bests[id]?.value ?? 0, me.config.id)}`);
     }
@@ -596,6 +604,7 @@ export async function startGame(
         } else if (me.flight.onGround) showBanner('CLEARED FOR TAKE-OFF', nowS);
         fuelAlert = 'full';
         weaponsEmpty = false;
+        gunLow = false;
         rollingOut = false;
         wasOnGround = me.flight.onGround;
       }
@@ -617,7 +626,11 @@ export async function startGame(
       if (me && me.alive && map.features) {
         const empty = me.stores.srm + me.stores.mrm === 0 && me.stores.cannonRounds === 0;
         if (empty && !weaponsEmpty) showBanner('WEAPONS EMPTY · RTB TO REARM', nowS, 3);
+        // Revision 26: the way home shows from 40 rounds left.
+        const low = !empty && me.stores.cannonRounds <= REARM_ROUNDS && me.config.stores.cannonRounds > REARM_ROUNDS;
+        if (low && !gunLow) showBanner(`GUN ${me.stores.cannonRounds} ROUNDS · RTB TO REARM`, nowS, 3);
         weaponsEmpty = empty;
+        gunLow = low;
       }
       // Fuel warnings (revision 16): once at BINGO, once when the engines flame out.
       if (me && me.alive) {
@@ -641,7 +654,7 @@ export async function startGame(
           cameraRig.reset();
         }
         if (c.jet !== 0 && canChangeJet) {
-          const jets = listAircraft(meNow.team);
+          const jets = changeableJets(meNow.team);
           const i = jets.findIndex((j) => j.id === (nextJet ?? meNow.config.id));
           nextJet = jets[(i + c.jet + jets.length) % jets.length].id;
           session.chooseNextJet(nextJet);

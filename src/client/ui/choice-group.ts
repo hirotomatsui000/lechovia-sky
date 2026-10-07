@@ -11,6 +11,11 @@ export interface Choice<T extends string> {
   value: T;
   label: string;
   kicker?: string;
+  /** shown but not choosable (a jet not unlocked yet, revision 26), with `title` saying why */
+  disabled?: boolean;
+  title?: string;
+  /** a small tag in the option's corner (the level a locked jet opens at) */
+  badge?: string;
 }
 
 /**
@@ -47,14 +52,18 @@ export function choiceGroup<T extends string>(
     input.id = `pick-${name}-${c.value}`;
     input.value = c.value;
     input.checked = c.value === value;
+    input.disabled = c.disabled ?? false;
     input.addEventListener('change', () => {
       if (input.checked) onChange(c.value);
     });
     const label = el('label', 'option');
     label.htmlFor = input.id;
+    if (c.disabled) label.classList.add('locked');
+    if (c.title) label.title = c.title;
     // The space keeps screen readers from running "Russia" and "Kobchik" together; grid layout ignores it.
     if (c.kicker) label.append(el('span', 'option-kicker', c.kicker), ' ');
     label.appendChild(el('span', 'option-name', c.label));
+    if (c.badge) label.appendChild(el('span', 'option-badge', c.badge));
     row.append(input, label);
   }
   return set;

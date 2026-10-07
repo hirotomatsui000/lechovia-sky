@@ -112,6 +112,72 @@ function drawBase(def: MapDefinition, terrain: Terrain): HTMLCanvasElement {
   return canvas;
 }
 
+/** The four points of the compass on the map's edges (north is up, east right): label and where it goes, pixels. */
+export function cardinalMarks(px: number, s: number): { label: 'N' | 'E' | 'S' | 'W'; u: number; v: number }[] {
+  const edge = 22 * s;
+  return [
+    { label: 'N', u: px / 2, v: edge },
+    { label: 'E', u: px - edge, v: px / 2 + 6 * s },
+    { label: 'S', u: px / 2, v: px - edge + 12 * s },
+    { label: 'W', u: edge, v: px / 2 + 6 * s },
+  ];
+}
+
+/** A compass rose: a ring, a red north needle, and N, E, S and W around it. */
+function compassRose(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, s: number): void {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.fillStyle = 'rgba(8,16,24,0.55)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 1.5 * s;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  // Ticks every 45°.
+  for (let k = 0; k < 8; k++) {
+    const a = (k * Math.PI) / 4;
+    const inner = k % 2 === 0 ? r * 0.72 : r * 0.84;
+    ctx.beginPath();
+    ctx.moveTo(Math.sin(a) * inner, -Math.cos(a) * inner);
+    ctx.lineTo(Math.sin(a) * r, -Math.cos(a) * r);
+    ctx.stroke();
+  }
+  // The needle: red to the north, white to the south.
+  const w = r * 0.18;
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.62);
+  ctx.lineTo(w, 0);
+  ctx.lineTo(-w, 0);
+  ctx.closePath();
+  ctx.fillStyle = '#ff4d4d';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0, r * 0.62);
+  ctx.lineTo(w, 0);
+  ctx.lineTo(-w, 0);
+  ctx.closePath();
+  ctx.fillStyle = '#f2f5f7';
+  ctx.fill();
+  ctx.font = `800 ${Math.round(11 * s)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const at = r + 9 * s;
+  for (const [text, a] of [
+    ['N', 0],
+    ['E', Math.PI / 2],
+    ['S', Math.PI],
+    ['W', (3 * Math.PI) / 2],
+  ] as const) {
+    ctx.lineWidth = 3 * s;
+    ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+    ctx.strokeText(text, Math.sin(a) * at, -Math.cos(a) * at);
+    ctx.fillStyle = text === 'N' ? '#ff6b6b' : '#fff';
+    ctx.fillText(text, Math.sin(a) * at, -Math.cos(a) * at);
+  }
+  ctx.restore();
+}
+
 /**
  * The map screen (M, spec §15.3): the whole map with towns, roads and airfields, the combat area, and live markers
  * for the player, teammates, known enemies and Strike targets. The match keeps running behind it.
@@ -268,8 +334,9 @@ export class MapScreen {
     }
     if (me && me.alive) this.marker(ctx, at(me.position.x, me.position.z), headingRad(me.flight), '#63ff95', 9 * s, true);
     if (this.pick) label('CLICK TO FLY FROM THERE · AN AIRFIELD STARTS ON ITS RUNWAY', px / 2, px - 40 * s, `700 ${Math.round(13 * s)}px system-ui, sans-serif`, '#63ff95');
-    // North and the scale.
-    label('N ↑', 24 * s, 28 * s, `700 ${Math.round(14 * s)}px system-ui, sans-serif`);
+    // The compass (revision 26): a rose in the corner and the four points on the map's edges; then the scale.
+    compassRose(ctx, 46 * s, 46 * s, 30 * s, s);
+    for (const m of cardinalMarks(px, s)) label(m.label, m.u, m.v, `800 ${Math.round(18 * s)}px system-ui, sans-serif`, m.label === 'N' ? '#ff6b6b' : '#fff');
     const km = def.sizeM > 100000 ? 20 : 5;
     const len = ((km * 1000) / def.sizeM) * px;
     ctx.fillStyle = '#fff';

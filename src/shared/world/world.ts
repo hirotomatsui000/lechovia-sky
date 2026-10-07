@@ -59,6 +59,11 @@ export interface AddAircraftOptions {
   bot?: DifficultyProfile;
   /** where the aircraft starts (and restarts): in the air, or on its team's runway where the mode allows it */
   start?: SpawnStart;
+  /**
+   * where its first life starts, if not there (revision 26): AI pilots take off with a player who starts on the
+   * runway, then come back in the air so the fight goes on
+   */
+  firstStart?: SpawnStart;
 }
 
 /**
@@ -150,7 +155,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     const field = this.map.features ? airfieldGroundAt(this.map.features.airfields, x, z) : null;
     let flight: FlightState;
     if (field) {
-      flight = runwayFlightState(field, a.id % 12);
+      flight = runwayFlightState(field, a.spawnSlot);
     } else {
       // Toward the middle of the area, high enough above the ground below.
       const heading = Math.atan2(c.x - x, -(c.z - z));
@@ -237,7 +242,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       team: opts.team,
       config,
       isBot: opts.bot !== undefined,
-      flight: this.spawnState(opts.team, slot, config.physics, opts.start ?? 'air'),
+      flight: this.spawnState(opts.team, slot, config.physics, opts.firstStart ?? opts.start ?? 'air'),
       spawnSlot: slot,
       bombLoad: this.mode.bombLoad(opts.team),
       lanceLoad: this.mode.lanceLoad?.() ?? null,

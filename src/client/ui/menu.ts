@@ -9,7 +9,10 @@ import { STRIKE_DEFAULTS, STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
 import { MISSION_RULES } from '../hud/objective-hud.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
+import { loadCareer } from '../career.ts';
+import { careerXp, isUnlocked, levelProgress, nextUnlock, unlockLevel } from '../progression.ts';
 import { isTouchOnly } from './device.ts';
+import { fullscreenButton } from './fullscreen.ts';
 import { MISSION_LABELS } from './records-format.ts';
 import { campaignSheet } from './campaign-sheet.ts';
 import { recordsSheet } from './records-sheet.ts';
@@ -245,10 +248,29 @@ function controlsSheet(settings: SettingsStore): HTMLDialogElement {
   return dialog;
 }
 
+/** The pilot's level under the callsign (revision 26): the level, a bar to the next one and the next jet it opens. */
+function levelBadge(p: ReturnType<typeof levelProgress>): HTMLElement {
+  const box = el('div', 'pilot-level');
+  const next = nextUnlock(p.level);
+  box.title = next ? `${(p.to - p.xp).toLocaleString('en-US')} XP to level ${p.level + 1}; the ${next.name} opens at level ${next.level}` : 'Every jet is open';
+  const bar = el('span', 'pilot-level-bar');
+  const fill = el('span', 'pilot-level-fill');
+  fill.style.transform = `scaleX(${p.fraction.toFixed(3)})`;
+  bar.appendChild(fill);
+  const head = el('span', 'pilot-level-head');
+  head.append(el('span', 'pilot-level-name', `Level ${p.level}`), bar);
+  const xp = el('span', 'pilot-level-xp', `${p.xp.toLocaleString('en-US')} / ${p.to.toLocaleString('en-US')} XP`);
+  if (next) xp.appendChild(el('span', 'pilot-level-next', ` · Next jet: ${next.name} (level ${next.level})`));
+  box.append(head, xp);
+  return box;
+}
+
 /** Shows the title screen over the live scene. Returns a cleanup function that removes it. */
 export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, settings: SettingsStore): () => void {
   const aircraft = listAircraft();
-  const ids = aircraft.map((a) => a.id);
+  // Pilot level (revision 26): the jets open as it rises; a saved jet still locked falls back to an open one.
+  const progress = levelProgress(careerXp(loadCareer()));
+  const ids = aircraft.filter((a) => isUnlocked(a.id, progress.level)).map((a) => a.id);
   let aircraftId = pickValid(loadSetting<unknown>('aircraft', ids[0]), ids, ids[0]);
   let difficulty = pickValid(loadSetting<unknown>('difficulty', 'rookie'), Object.keys(DIFFICULTIES) as DifficultyId[], 'rookie');
   let mission = pickValid(
@@ -269,7 +291,9 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   callsign.spellcheck = false;
   callsign.value = sanitizeCallsign(String(loadSetting<unknown>('callsign', 'Pilot')));
   pilot.append(el('span', 'eyebrow', 'Pilot'), callsign);
-  top.appendChild(pilot);
+  // Fullscreen (revision 26).
+  const fullscreen = fullscreenButton('link fullscreen-toggle');
+  top.append(levelBadge(progress), fullscreen.button, pilot);
 
   const main = el('div', 'start-main');
   const brand = el('header', 'brand');
@@ -291,7 +315,11 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   const jets = choiceGroup(
     'aircraft',
     'Aircraft',
-    aircraft.map((a) => ({ value: a.id, label: a.name })),
+    aircraft.map((a) =>
+      isUnlocked(a.id, progress.level)
+        ? { value: a.id, label: a.name }
+        : { value: a.id, label: a.name, badge: `🔒 Lv ${unlockLevel(a.id)}`, disabled: true, title: `Unlocks at pilot level ${unlockLevel(a.id)}` },
+    ),
     aircraftId,
     (id) => {
       aircraftId = id;
@@ -419,5 +447,8 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   handlers.onPreview(aircraftId);
   handlers.onWorld?.(environmentOf(world));
   fly.focus();
-  return () => screen.remove();
+  return () => {
+    fullscreen.dispose();
+    screen.remove();
+  };
 }

@@ -81,12 +81,13 @@ export class LocalSession implements GameSession {
     if (opts.opponents) {
       const team = opposingTeam(config.team);
       for (let i = 0; i < opts.opponents.count; i++) {
-        this.world.addAircraft({ callsign: botCallsign(team, i), team, aircraftId: randomAircraft(team, jets).id, bot: opts.opponents.profile });
+        // They take off with a player who starts on the runway (revision 26).
+        this.world.addAircraft({ callsign: botCallsign(team, i), team, aircraftId: randomAircraft(team, jets).id, bot: opts.opponents.profile, firstStart: opts.start });
       }
     }
     if (opts.wingmen) {
       for (let i = 0; i < opts.wingmen.count; i++) {
-        this.world.addAircraft({ callsign: botCallsign(config.team, i), team: config.team, aircraftId: randomAircraft(config.team, jets).id, bot: opts.wingmen.profile });
+        this.world.addAircraft({ callsign: botCallsign(config.team, i), team: config.team, aircraftId: randomAircraft(config.team, jets).id, bot: opts.wingmen.profile, firstStart: opts.start });
       }
     }
     this.targetViews = this.world.groundTargetList().map((t) => ({

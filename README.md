@@ -11,10 +11,15 @@ is rebuilt after every push ([Publish as a website](#publish-as-a-website)). The
 **Current milestone: M5 "Modes & polish"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
 "Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02: the game is
 single player against AI pilots and runs entirely in the browser.
+- **Levels** (2026-10-07): every match earns experience (more for a win, each kill and Sentinel), and levels open the
+  jets one at a time: Kestrel and Kobchik from the start, Shade at level 7. Matches already on record count.
+- **Take off together** (2026-10-07): with a runway start, the AI pilots start on their runways and take off with you.
+- **Fullscreen** (2026-10-07): a Fullscreen link on the title screen and in the pause menu. The map (M) shows N, E,
+  S and W.
 - **Opening** (2026-10-06): the page opens on five seconds of gun-camera footage while the game loads: the HUD boots,
   a bandit overtakes overhead, the HUD locks it, FOX 2, and the title comes out of the fireball. Click or press any
   key to skip.
-- **Rearm at an airfield** (2026-10-06, Lechovia): out of missiles or rounds, the HUD points the way to the nearest
+- **Rearm at an airfield** (2026-10-06, Lechovia): out of missiles or down to 40 gun rounds, the HUD points the way to the nearest
   airfield you can use (your team's or a neutral one). Fly low and slow along its runway (under about 250 kt and
   450 ft for 3 s) to reload missiles, gun rounds and flares and refuel; or land: the gear comes down by itself on
   approach, the HUD outlines the runway and shows your sink rate, and stopped on the runway (B brakes) you are also

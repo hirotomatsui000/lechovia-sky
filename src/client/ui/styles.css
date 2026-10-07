@@ -97,7 +97,17 @@ body {
   padding: clamp(16px, 4vh, 40px) clamp(16px, 5.5vw, 88px);
 }
 
-.start-top { display: flex; justify-content: flex-end; }
+.start-top { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: flex-end; gap: 12px 28px; }
+/* Pilot level (revision 26): under the callsign, a bar toward the next level and the next jet it opens. */
+.pilot-level { display: grid; justify-items: end; gap: 6px; padding-bottom: 6px; font: 500 10px/1.2 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ghost); }
+.pilot-level-head { display: flex; align-items: center; gap: 10px; }
+.pilot-level-name { font: 700 15px/1 var(--display); letter-spacing: 0.12em; color: var(--hud); }
+.pilot-level-bar { position: relative; width: 140px; height: 3px; background: rgb(255 255 255 / 0.15); overflow: hidden; }
+.pilot-level-fill { position: absolute; inset: 0; background: var(--hud); transform-origin: left; }
+.pilot-level-xp { color: var(--ghost); }
+.pilot-level-next { color: var(--warn); }
+/* Fullscreen (revision 26): a link beside the callsign. */
+.fullscreen-toggle { padding-bottom: 6px; }
 
 .start-main {
   align-self: safe center;
@@ -186,6 +196,10 @@ body {
 .opponent-row { display: flex; flex-wrap: wrap; gap: 12px 36px; }
 
 input:checked + .option { color: var(--canopy); }
+/* A jet not unlocked yet (revision 26): dimmed, with its level as the kicker. */
+.option.locked { color: rgb(159 176 189 / 0.45); cursor: not-allowed; }
+.option.locked:hover { color: rgb(159 176 189 / 0.45); }
+.option-badge { position: absolute; top: -3px; right: 0; font: 600 9px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--warn); white-space: nowrap; }
 
 /* A HUD designation box: four corner brackets that snap onto the chosen option. */
 .option::before {

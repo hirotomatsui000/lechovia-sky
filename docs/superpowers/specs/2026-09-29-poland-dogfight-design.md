@@ -1,4 +1,4 @@
-# Lechovia Skies — Design Spec (revision 25)
+# Lechovia Skies — Design Spec (revision 26)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -88,6 +88,11 @@
     the camera was, so a camera trailing into a cloud top whitened the view of a jet above it; and an overcast deck,
     one quad 400 km across, failed to hide what lay beyond it from just under it, and a camera behind a jet skimming
     its top dipped through it (§12.3, §15.1). The opening now pauses only while the tab is hidden (§15.5).
+  - Revision 26 (2026-10-07): six requests from the owner. Fullscreen from the title screen and the pause menu
+    (§15.5). A runway start put the player in the left lane; a team's first jet now stands on the centre line (§13).
+    Pilot levels from the career records open the jets one at a time (§15.5). The way home shows from 40 gun rounds
+    left (§15.2). With a runway start the AI pilots start on their runways too and take off with the player, then come
+    back in the air (§13, §14). The map screen has a compass rose and N, E, S and W on its edges (§15.5).
 - **Owner:** Hiroto Matsui
 - **Title:** Lechovia Skies (`lechovia-skies`); the working title until revision 19 was Contested Skies.
 
@@ -808,9 +813,13 @@ All modes implement `GameMode`: setup, per-tick update, scoring on events, spawn
 
 **Spawning:** airborne at the team's spawn line (5,000 m, 250 m/s, facing the front) or, from M4, at the team's airfield
 on the runway, as the player chooses. Strike uses its own spawn points (§12.2).
-- Runway starts (M4) are offered in Team Deathmatch and Free Flight on maps with a team airfield: two lanes 12 m
-  either side of the centre line, rows 300 m apart from 150 m past the threshold, at full military power. Bots and
-  Strike always start in the air.
+- Runway starts (M4) are offered in Team Deathmatch and Free Flight on maps with a team airfield, at full military
+  power from 150 m past the threshold. Revision 26: a team's first jet (the player's, or the first AI pilot of the other
+  team) on the centre line, the rest in rows 300 m apart behind it, two to a row 12 m either side of the centre line
+  (`runwaySlot`); the first jet used to stand in the left lane. Strike always starts in the air.
+- Revision 26: when the player starts on the runway, the AI pilots of both teams start their first life on their own
+  team's runway too (`firstStart`) and take off at the same moment; they come back in the air after a death so the
+  fight goes on, while the player keeps the start they chose.
 
 ### 13.1 Strike (M1d)
 
@@ -944,6 +953,9 @@ stands still. Mission 1 is always open; clearing (winning) a mission opens the n
     new maneuvers but not to straight flight.
 - **Steering primitive:** `steerToward(state, desiredDirection)`. It banks until the target direction lies in the lift
   plane, pulls, and uses rudder and wing-leveling for fine alignment. The same function drives the human mouse-aim mode.
+- **Take-off (revision 26):** from a runway start a bot holds the centre line at full afterburner, raises the nose
+  from 72 m/s, and climbs out straight ahead at 12° with the wings level until 300 m above the ground; nothing else
+  runs until then. Every jet lifts off in 9–12 s and reaches 300 m in 22–28 s.
 - **Behavior priority** (highest first):
   1. **Ground avoidance:** if the flight path predicted 5 s ahead gets closer than 150 m to the surface, pull up.
   2. **Boundary:** turn back inside the area.
@@ -1058,7 +1070,8 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
     the owner took it for a broken aiming line.)
   - **Defender:** banners `TARGET B UNDER ATTACK` (when a target is hit, at most once per 3 s per target) and
     `TARGET B DESTROYED`; the kill feed also records destroyed targets.
-- **The way home and the landing (revision 22, `hud/supply-hud.ts`):** with no missiles or no gun rounds left, fuel
+- **The way home and the landing (revision 22, `hud/supply-hud.ts`):** with no missiles or 40 gun rounds or fewer left
+  (revision 26, at the owner's request; it was none, and a `GUN n ROUNDS · RTB TO REARM` banner shows once), fuel
   under BINGO or hit points under 30%, a diamond marks the nearest friendly airfield with the reason and the range
   (`RTB · REARM · WILKOWO AIR BASE 43 KM`), or an amber edge arrow when it is off screen; with both missiles and rounds
   gone a `WEAPONS EMPTY · RTB TO REARM` banner shows once. Within 12 km of a friendly runway and 1,500 m above it the
@@ -1181,6 +1194,19 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   - The title screen is built underneath from the start, so the cut lands on it ready. A click, a tap or any key
     skips (0.4 s fade). Keys it takes never reach the title screen: a held Enter or Space does not press FLY.
   - With reduced motion: no jets, blast, shake or flashes; the sky, the HUD and the title fade in.
+- **Fullscreen (revision 26, `ui/fullscreen.ts`):** a Fullscreen link at the top of the title screen and a button in
+  the pause menu put the page in fullscreen and back (with the webkit names on older Safari; hidden where the browser
+  cannot, such as iPhone Safari). Esc leaves it as browsers do.
+- **Pilot levels (revision 26, `progression.ts`):** experience comes from the career records, so earlier matches count:
+  100 per finished match, +150 for a win, +50 for a draw, +50 per kill and +100 per Sentinel. Level n needs
+  100 · (n² − 1) XP (300, 800, 1,500, 2,400, 3,500, 4,800 …). The jets open from level 1: Kestrel and Kobchik; then
+  Yastreb (2), Condor (3), Sapsan (4), Tempest (5), Prizrak (6) and Shade (7). The title screen shows the level, a bar
+  to the next one and the next jet; locked jets are dimmed with a `🔒 LV n` tag and cannot be chosen, and a saved jet
+  still locked falls back to an open one. The end screen lists the XP a match earned, a level up and any jet it
+  opened. A campaign mission still lends its own jet, and the in-match jet change offers the open jets and the one
+  the match started with.
+- **Map compass (revision 26):** the map screen draws a compass rose in its corner (a red north needle, N, E, S and
+  W) and the four letters in the middle of its edges, north at the top.
 - **Start screen (revision 4):** a minimal title screen over a live 3D scene. The selected jet circles over the
   landscape while the camera orbits it slowly; the scene holds still when the system asks for reduced motion.
   - On screen: the title, the aircraft choice, the opponent's skill, a large FLY button, links to Free Flight and to

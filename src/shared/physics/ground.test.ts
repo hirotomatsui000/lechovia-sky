@@ -41,10 +41,13 @@ describe('ground handling and take-off (spec §8, M4)', () => {
     expect(s.pos.y).toBeCloseTo(restingHeight(field.elevationM), 6);
     const { u } = airfieldLocal(field, s.pos.x, s.pos.z);
     expect(u).toBeCloseTo(-field.lengthM / 2 + 150, 6);
-    // Slots fill two lanes, then the next row.
-    const lanes = [0, 1, 2].map((k) => airfieldLocal(field, runwayFlightState(field, k).pos.x, runwayFlightState(field, k).pos.z));
-    expect(lanes[0].v).toBeCloseTo(-lanes[1].v, 6);
-    expect(lanes[2].u - lanes[0].u).toBeCloseTo(300, 6);
+    // The first slot on the centre line (revision 26), then two to a row behind it.
+    const lanes = [0, 1, 2, 3].map((k) => airfieldLocal(field, runwayFlightState(field, k).pos.x, runwayFlightState(field, k).pos.z));
+    expect(lanes[0].v).toBeCloseTo(0, 6);
+    expect(lanes[1].v).toBeCloseTo(-lanes[2].v, 6);
+    expect(Math.abs(lanes[1].v)).toBeCloseTo(12, 6);
+    expect(lanes[1].u - lanes[0].u).toBeCloseTo(300, 6);
+    expect(lanes[3].u - lanes[1].u).toBeCloseTo(300, 6);
   });
 
   for (const config of listAircraft()) {

@@ -5,7 +5,7 @@ import type { TeamId } from '../shared/data/aircraft/types.ts';
 import type { MapId } from '../shared/data/maps/registry.ts';
 import { BOMB_ANVIL, CANNONS } from '../shared/data/weapons.ts';
 import { timeToImpact } from '../shared/map/ground-proximity.ts';
-import { DEG } from '../shared/math/units.ts';
+import { clamp, DEG } from '../shared/math/units.ts';
 import type { GameMode } from '../shared/modes/mode.ts';
 import { createMode } from '../shared/modes/registry.ts';
 import { STRIKE_AIRCRAFT_PER_PILOT } from '../shared/modes/strike.ts';
@@ -14,10 +14,11 @@ import { predictImpact } from '../shared/weapons/bomb.ts';
 import { gunAssistPull } from '../shared/weapons/gun-assist.ts';
 import { leadDirection } from '../shared/weapons/lead.ts';
 import type { GameEvent } from '../shared/world/events.ts';
+import { WEATHER } from '../shared/world/weather.ts';
 import { DT } from '../shared/world/world.ts';
 import { AudioEngine } from './audio/audio-engine.ts';
 import { explosionGain, missileTone, nearestSources } from './audio/sound-mix.ts';
-import { CameraRig, type CameraTarget } from './camera/camera-rig.ts';
+import { CameraRig, type CameraTarget, cloudDeck } from './camera/camera-rig.ts';
 import { DeathCam, killcamFov, killcamPosition } from './camera/death-cam.ts';
 import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
@@ -219,8 +220,9 @@ export async function startGame(
   const impactPoint = new Vector3();
   const effects = new Effects(renderer.scene, { terrain, wreckModel: (id) => sceneSync.modelFor(id)?.root ?? null });
   const cameraRig = new CameraRig(renderer.camera);
-  // The ground never comes between the camera and the jet (revision 23).
+  // The ground never comes between the camera and the jet (revision 23), nor an overcast deck (revision 25).
   cameraRig.ground = (x, z) => terrain.surfaceAt(x, z);
+  cameraRig.deck = cloudDeck(WEATHER[session.environment.weather]);
   const hud = new Hud(root);
   const input = new DomInput(renderer.webgl.domElement);
   input.attach();
@@ -549,7 +551,9 @@ export async function startGame(
   const frame = (now: number) => {
     if (!running) return;
     const nowS = now / 1000;
-    const dt = Math.min((now - last) / 1000, 0.1);
+    // Never negative: a frame's timestamp can come before a performance.now() read just before it (at the start, or
+    // on resuming), and a negative step would throw the camera's easing and shake the wrong way.
+    const dt = clamp((now - last) / 1000, 0, 0.1);
     last = now;
     const snap = input.snapshot();
     const padFrame = pad.read(pollGamepad(), settings.current.gamepad);
@@ -701,9 +705,12 @@ export async function startGame(
       if (weatherChanged) {
         environment.dispose();
         environment = makeEnvironment();
+        cameraRig.deck = cloudDeck(WEATHER[session.environment.weather]);
       }
     }
-    environment.update(session.hour(), renderer.camera, active ? dt : 0);
+    // In cloud or not goes by the jet the camera follows (revision 25).
+    const subject = local && local.alive ? local.position : watched && watched.alive ? watched.position : null;
+    environment.update(session.hour(), renderer.camera, active ? dt : 0, subject);
     particleFrame.fogColor.copy(environment.fog.color);
     particleFrame.fogDensity = environment.fog.density;
     // Free Flight can change the weather, and the wind with it.

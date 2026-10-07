@@ -18,6 +18,11 @@ import { CLOUD_CELL_M, cellPuffs, type Puff } from './cloud-puffs.ts';
 const MAX_PUFFS = 24000;
 /** The deck planes reach this far either side of the camera. */
 const DECK_SIZE_M = 400000;
+/**
+ * …in tiles about 6 km across (revision 25): drawn as one quad 400 km across, the sheet's huge triangles came out
+ * wrong close to the camera, and from just under the deck it failed to hide what lay beyond it.
+ */
+export const DECK_SEGMENTS = 64;
 
 const PUFF_VERTEX = /* glsl */ `
 attribute vec3 iPos;
@@ -169,7 +174,7 @@ export class CloudLayer {
           fog: true,
           side: DoubleSide,
         });
-        const mesh = new Mesh(new PlaneGeometry(DECK_SIZE_M, DECK_SIZE_M).rotateX(top ? -Math.PI / 2 : Math.PI / 2), material);
+        const mesh = new Mesh(new PlaneGeometry(DECK_SIZE_M, DECK_SIZE_M, DECK_SEGMENTS, DECK_SEGMENTS).rotateX(top ? -Math.PI / 2 : Math.PI / 2), material);
         mesh.position.y = top ? p.cloudTopM : p.cloudBaseM;
         mesh.frustumCulled = false;
         mesh.name = top ? 'cloud-deck-top' : 'cloud-deck-base';

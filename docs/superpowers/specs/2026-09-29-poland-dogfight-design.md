@@ -1,4 +1,4 @@
-# Lechovia Skies — Design Spec (revision 24)
+# Lechovia Skies — Design Spec (revision 25)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -81,6 +81,13 @@
     the jet had just cleared, so the ground covered the jet. It now keeps clear of the ground (§15.1).
   - Revision 24 (2026-10-06): at the owner's request ("about five seconds of a really cool loading screen before the
     title screen"), the page opens on five seconds of gun-camera footage while the scenery and jets load (§15.5).
+  - Revision 25 (2026-10-07): the owner saw clouds come out in front of the jet now and then, flying above them. Over
+    cumulus the cloud billboards draw correctly in front of and behind the jet, so the fixes are to what moves the
+    view: a frame step that could run backwards (its timestamp earlier than the clock read at the start or on resuming)
+    grew the camera shake past its cap and swung the camera tens of degrees off the jet; the white-out went by where
+    the camera was, so a camera trailing into a cloud top whitened the view of a jet above it; and an overcast deck,
+    one quad 400 km across, failed to hide what lay beyond it from just under it, and a camera behind a jet skimming
+    its top dipped through it (§12.3, §15.1). The opening now pauses only while the tab is hidden (§15.5).
 - **Owner:** Hiroto Matsui
 - **Title:** Lechovia Skies (`lechovia-skies`); the working title until revision 19 was Contested Skies.
 
@@ -746,7 +753,8 @@ The owner asked for a way to fly home and take on missiles and gun rounds again 
 - Weather (cloud base and top): Clear; Scattered 25% (1,600–2,700 m); Broken 60% (1,300–3,200 m); Overcast, a deck
   1,100–2,300 m; Rain, a deck 800–2,600 m with rain streaks below it. Cumulus are soft billboards placed in 1.6 km cells
   where the shared cloud field has cloud, sorted back to front, drawn within 20, 30 or 40 km (graphics preset);
-  inside a cloud the haze closes to a whiteout.
+  inside a cloud the haze closes to a whiteout. Revision 25: the white-out goes by where the jet the camera follows is,
+  not the camera, and the overcast deck is drawn in 64 × 64 tiles (about 6 km) rather than one quad 400 km across.
 - Time: 52° N at the equinox (sunrise 06:00, noon sun 38° up in the south, sunset 18:00). Start times Dawn 06:30, Day
   12:00, Dusk 17:30, Night 23:00; the clock runs one game hour per real minute unless held. The HUD shows the local
   time and dims at night.
@@ -1010,6 +1018,10 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   the line to the jet (or the kill cam's subject) 2 m above it at eight samples; when the ground is in the way the
   camera rises at once (at most 300 m) and settles back over 0.4 s once clear. Before, flying low over hills the
   camera could sit in a slope behind the jet or behind a ridge it had just cleared, and the scenery covered the jet.
+- **On the jet's side of the deck (revision 25, `deckShift`):** in overcast and rain the camera stays 4 m above the
+  deck's top while the jet flies above it, and 4 m under its base while the jet flies under it (as far as the ground
+  allows); it moves at once and settles back like the ground clearance. Inside the deck it is left alone.
+- **Never backwards (revision 25):** a frame step below zero counts as zero, and the shake never passes its cap.
 - **Look around:** holding C or the right mouse button swings the camera around the jet; releasing it swings back.
   The look direction also aims the helmet sight.
 - **Shake:** trauma-based noise from G > 6, the transonic buffet band, afterburner, cannon fire, hits and nearby
@@ -1162,8 +1174,10 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
     At 3.4 s the title (LECHOVIA over SKIES, as on the title screen) slams in with colour fringes that close up;
     then the red streamer, a light sweep and the tag line. Grain, scan lines and a vignette throughout.
   - At 5 s it cuts to the title screen with a white flash and a fade, as soon as everything has loaded; it waits
-    for loading no longer than 9 s, after which the title screen's own load bar carries on. It counts real time,
-    so a slow machine still sees five seconds; a hidden tab pauses it.
+    for loading no longer than 9 s, after which the title screen's own load bar carries on. It counts real time
+    (a frame counts for 2 s at most), so a slow machine still sees five seconds; only the time the tab is hidden is
+    left out (revision 25: a frame slower than 1 s used to count as a hidden tab, and on a very slow machine the
+    footage crawled).
   - The title screen is built underneath from the start, so the cut lands on it ready. A click, a tap or any key
     skips (0.4 s fade). Keys it takes never reach the title screen: a held Enter or Space does not press FLY.
   - With reduced motion: no jets, blast, shake or flashes; the sky, the HUD and the title fade in.

@@ -1,6 +1,7 @@
 import { PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { CameraRig, type CameraTarget, clearanceLift, decayTrauma, sustainedTrauma } from './camera-rig.ts';
+import { WEATHER } from '../../shared/world/weather.ts';
+import { CameraRig, type CameraTarget, clearanceLift, cloudDeck, decayTrauma, deckShift, sustainedTrauma } from './camera-rig.ts';
 
 /** A jet at 1000 m pointing north (-z) unless told otherwise. */
 const target = (position = new Vector3(0, 1000, 0), quaternion = new Quaternion()): CameraTarget => ({
@@ -27,6 +28,13 @@ describe('camera shake', () => {
     expect(sustainedTrauma(1, 0.6, 1)).toBe(0.08);
     expect(decayTrauma(1, 1)).toBe(0);
     expect(decayTrauma(1, 0.2)).toBeCloseTo(0.7, 6);
+  });
+
+  it('never grows on a frame that runs backwards, and never passes 1 (revision 25)', () => {
+    // Regression: a negative frame step grew the shake past 1, and the camera swung tens of degrees off the jet.
+    expect(decayTrauma(0, -2)).toBe(0);
+    expect(decayTrauma(0.5, -2)).toBe(0.5);
+    expect(decayTrauma(5, 0)).toBe(1);
   });
 });
 
@@ -126,3 +134,61 @@ describe('the camera keeps the ground out of the way (revision 23)', () => {
   });
 });
 
+
+describe('the camera stays on the jet\'s side of an overcast deck (revision 25)', () => {
+  const deck = { baseM: 1100, topM: 2300 };
+  /** Nose up by `rad` (keyboard mode: the camera follows the nose and drops behind and below a climbing jet). */
+  const noseUp = (rad: number) => new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), rad);
+
+  it('reads the deck off the weather', () => {
+    expect(cloudDeck(WEATHER.overcast)).toEqual({ baseM: 1100, topM: 2300 });
+    expect(cloudDeck(WEATHER.rain)).toEqual({ baseM: 800, topM: 2600 });
+    expect(cloudDeck(WEATHER.scattered)).toBeNull();
+    expect(cloudDeck(WEATHER.clear)).toBeNull();
+  });
+
+  it('says how far to move: up over the top, down under the base, nothing inside', () => {
+    expect(deckShift(new Vector3(0, 2296, 0), new Vector3(0, 2302, 0), deck)).toBeCloseTo(8, 9);
+    expect(deckShift(new Vector3(0, 2400, 0), new Vector3(0, 2302, 0), deck)).toBe(0);
+    expect(deckShift(new Vector3(0, 1104, 0), new Vector3(0, 1097, 0), deck)).toBeCloseTo(-8, 9);
+    expect(deckShift(new Vector3(0, 1000, 0), new Vector3(0, 1097, 0), deck)).toBe(0);
+    expect(deckShift(new Vector3(0, 2296, 0), new Vector3(0, 2000, 0), deck)).toBe(0);
+  });
+
+  it('keeps a camera behind a jet climbing away just above the deck out of the deck', () => {
+    // Regression: the camera dipped under the deck's top and the sheet of cloud hid the jet.
+    const cam = new PerspectiveCamera();
+    const rig = new CameraRig(cam);
+    rig.deck = deck;
+    tick(rig, 1, target(new Vector3(0, 2302, 0), noseUp(0.6)));
+    expect(cam.position.y).toBeGreaterThanOrEqual(2304 - 1e-9);
+    // Well above the deck it settles back to its usual place behind and below the climbing jet.
+    const t = target(new Vector3(0, 2600, 0), noseUp(0.6));
+    tick(rig, 3, t);
+    rig.deck = null;
+    const free = new PerspectiveCamera();
+    tick(new CameraRig(free), 3, t);
+    expect(cam.position.distanceTo(free.position)).toBeLessThan(0.1);
+  });
+
+  it('keeps under the base with a jet just under the deck, unless the ground is in the way', () => {
+    const cam = new PerspectiveCamera();
+    const rig = new CameraRig(cam);
+    rig.deck = deck;
+    rig.ground = () => 0;
+    tick(rig, 1, target(new Vector3(0, 1097, 0)));
+    expect(cam.position.y).toBeLessThanOrEqual(1096 + 1e-9);
+    // Ground just below: the camera sinks only as far as the ground allows.
+    rig.ground = () => 1094;
+    tick(rig, 1, target(new Vector3(0, 1097, 0)));
+    expect(cam.position.y).toBeGreaterThanOrEqual(1097 - 1e-6);
+  });
+
+  it('leaves the camera alone with the jet inside the deck', () => {
+    const cam = new PerspectiveCamera();
+    const rig = new CameraRig(cam);
+    rig.deck = deck;
+    tick(rig, 1, target(new Vector3(0, 1700, 0)));
+    expect(cam.position.y).toBeCloseTo(1707, 3);
+  });
+});

@@ -170,6 +170,10 @@ export function showIntro(root: HTMLElement, progress: LoadProgress, reducedMoti
     let outLength = INTRO_OUT_S;
     // Keys the opening took, held until they come up so a held Enter or Space never presses FLY underneath.
     const held = new Set<string>();
+    let wasHidden = false;
+    const onVisibility = (): void => {
+      if (document.hidden) wasHidden = true;
+    };
 
     const skip = (): void => {
       if (outStart < 0) {
@@ -200,6 +204,7 @@ export function showIntro(root: HTMLElement, progress: LoadProgress, reducedMoti
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
     window.addEventListener('resize', onResize);
+    document.addEventListener('visibilitychange', onVisibility);
     overlay.addEventListener('pointerdown', skip);
     onResize();
     // The title is drawn in the fallback face until Rajdhani has loaded, then again in it.
@@ -208,10 +213,11 @@ export function showIntro(root: HTMLElement, progress: LoadProgress, reducedMoti
       .catch(() => {});
 
     const frame = (now: number): void => {
-      // Real time, so a slow machine still sees about five seconds; a gap of over a second is a hidden tab, which
-      // pauses the footage instead of running it out unseen.
-      const gap = last < 0 ? 0 : Math.max(0, (now - last) / 1000);
-      const dt = gap > 1 ? 1 / 60 : gap;
+      // Real time, so a slow machine still sees about five seconds (a frame counts for 2 s at most); the time a tab
+      // spends hidden does not count, so the footage is not run out unseen.
+      const gap = last < 0 ? 0 : clamp((now - last) / 1000, 0, 2);
+      const dt = wasHidden ? 1 / 60 : gap;
+      wasHidden = false;
       last = now;
       t += dt;
       if (outStart < 0 && revealAt(t, progress.complete)) outStart = t;
@@ -222,6 +228,7 @@ export function showIntro(root: HTMLElement, progress: LoadProgress, reducedMoti
       if (overlay.getAttribute('aria-valuenow') !== percent) overlay.setAttribute('aria-valuenow', percent);
       if (out >= 1) {
         window.removeEventListener('resize', onResize);
+        document.removeEventListener('visibilitychange', onVisibility);
         overlay.remove();
         if (held.size === 0) unlisten();
         resolve();

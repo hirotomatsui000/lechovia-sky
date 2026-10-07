@@ -182,7 +182,11 @@ export class Environment {
     this.cloudLayer.rangeM = m;
   }
 
-  update(hour: number, camera: PerspectiveCamera, dt: number): void {
+  /**
+   * `subject`: the jet the camera follows. Whether we are in cloud (the white-out) goes by where it is, not the camera
+   * (revision 25): a camera trailing a jet that skims a cloud top dipped into the cloud and turned the view white.
+   */
+  update(hour: number, camera: PerspectiveCamera, dt: number, subject: Vector3 | null = null): void {
     const cam = camera.position;
     if (dt > 0) this.cameraVelocity.subVectors(cam, this.prevCamera).divideScalar(dt);
     this.prevCamera.copy(cam);
@@ -240,7 +244,8 @@ export class Environment {
       if (underDeck) fogColor.copy(grey);
     }
     fogColor.lerp(NIGHT_HAZE, this.night * 0.9);
-    const inCloud = this.clouds.densityAt(cam.x, cam.y, cam.z);
+    const eye = subject ?? cam;
+    const inCloud = this.clouds.densityAt(eye.x, eye.y, eye.z);
     let density = HAZE_DENSITY * p.hazeFactor * (aboveDeck ? 0.8 : 1);
     if (inCloud > 0) {
       density = lerp(density, WHITEOUT_DENSITY, smoothstep(0, 0.6, inCloud));

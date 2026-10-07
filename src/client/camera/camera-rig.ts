@@ -1,5 +1,6 @@
 import { Euler, Matrix4, type PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { approach, clamp, DEG } from '../../shared/math/units.ts';
+import type { WeatherPreset } from '../../shared/world/weather.ts';
 
 export interface CameraTarget {
   position: Vector3;
@@ -32,6 +33,14 @@ const LINE_CLEARANCE_M = 2;
 const LINE_SAMPLES = 8;
 const SETTLE_TAU_S = 0.4;
 const MAX_LIFT_M = 300;
+/** The camera stays this far on the jet's side of an overcast deck (revision 25). */
+const DECK_CLEARANCE_M = 4;
+
+/** An overcast deck's base and top: flat sheets of cloud the camera must not end up on the far side of. */
+export interface CloudDeck {
+  baseM: number;
+  topM: number;
+}
 
 /** How far to raise a camera at `cam` so it clears the ground and the ground does not hide `subject`; 0 when clear. */
 export function clearanceLift(cam: Vector3, subject: Vector3, ground: (x: number, z: number) => number): number {
@@ -45,6 +54,35 @@ export function clearanceLift(cam: Vector3, subject: Vector3, ground: (x: number
   return clamp(lift, 0, MAX_LIFT_M);
 }
 
+/**
+ * How far to move a camera at `cam` (up positive) to keep it on `subject`'s side of an overcast deck (revision 25):
+ * above the top when the jet flies above it, below the base when the jet flies under it; 0 when it already is, or the
+ * jet is inside the deck. Otherwise a camera trailing a jet that skims the deck dipped through it, and the sheet of
+ * cloud hid the jet.
+ */
+export function deckShift(cam: Vector3, subject: Vector3, deck: CloudDeck): number {
+  if (subject.y >= deck.topM) return Math.max(0, deck.topM + DECK_CLEARANCE_M - cam.y);
+  if (subject.y <= deck.baseM) return Math.min(0, deck.baseM - DECK_CLEARANCE_M - cam.y);
+  return 0;
+}
+
+/** The weather's overcast deck, or null when its clouds are cumulus or there are none. */
+export function cloudDeck(preset: WeatherPreset): CloudDeck | null {
+  return preset.deck && preset.coverage > 0 ? { baseM: preset.cloudBaseM, topM: preset.cloudTopM } : null;
+}
+
+const lowered = new Vector3();
+
+/**
+ * The lowest lift (metres, negative to lower the camera) at which the camera clears the ground, trying `tryLift`
+ * when it is negative: the ground's say in how far the camera may sink below its place to stay under a deck.
+ */
+export function groundFloor(cam: Vector3, subject: Vector3, ground: (x: number, z: number) => number, tryLift: number): number {
+  const need = clearanceLift(cam, subject, ground);
+  if (need > 0 || tryLift >= 0) return need;
+  return Math.min(0, tryLift + clearanceLift(lowered.set(cam.x, cam.y + tryLift, cam.z), subject, ground));
+}
+
 /** Continuous shake sources: high G, the transonic buffet band and afterburner rumble. */
 export function sustainedTrauma(gLoad: number, mach: number, throttle: number): number {
   const g = clamp((Math.abs(gLoad) - 6) / 3, 0, 1) * 0.5;
@@ -54,7 +92,7 @@ export function sustainedTrauma(gLoad: number, mach: number, throttle: number): 
 }
 
 export function decayTrauma(trauma: number, dt: number): number {
-  return Math.max(0, trauma - TRAUMA_DECAY_PER_S * dt);
+  return clamp(trauma - TRAUMA_DECAY_PER_S * Math.max(0, dt), 0, 1);
 }
 
 const WORLD_UP = new Vector3(0, 1, 0);
@@ -64,6 +102,8 @@ export class CameraRig {
   reduceMotion = false;
   /** the ground's height, so the camera stays out of it (revision 23); null where there is no terrain */
   ground: ((x: number, z: number) => number) | null = null;
+  /** an overcast deck to keep on the jet's side of (revision 25); null in other weather */
+  deck: CloudDeck | null = null;
   private lift = 0;
   private readonly camera: PerspectiveCamera;
   private trauma = 0;
@@ -154,13 +194,19 @@ export class CameraRig {
   /**
    * Raises the camera out of the ground and over any ground between it and `subject` (revision 23): flying low over
    * hills, the chase camera 30 m behind could sit in a slope, or behind a ridge the jet had just cleared, and the
-   * scenery covered the jet. It rises at once and settles back gently.
+   * scenery covered the jet. It also keeps the camera on the jet's side of an overcast deck (revision 25). It moves
+   * at once when it must and settles back gently; the ground wins over the deck.
    */
   private keepClear(subject: Vector3, dt: number): void {
-    if (!this.ground) return;
+    if (!this.ground && !this.deck) return;
     const cam = this.camera.position;
-    const need = clearanceLift(cam, subject, this.ground);
-    this.lift = Math.max(need, dt > 0 ? approach(this.lift, need, dt, SETTLE_TAU_S) : need);
+    const deck = this.deck ? deckShift(cam, subject, this.deck) : 0;
+    // How far the camera may go: up out of the ground, or the deck; down under the deck, as far as the ground allows.
+    const floor = this.ground ? groundFloor(cam, subject, this.ground, deck < 0 ? deck : Math.min(0, this.lift)) : -Infinity;
+    const lo = Math.max(floor, deck > 0 ? deck : -Infinity);
+    const hi = deck < 0 ? Math.max(deck, lo) : Infinity;
+    const want = clamp(0, lo, hi);
+    this.lift = clamp(dt > 0 ? approach(this.lift, want, dt, SETTLE_TAU_S) : want, lo, hi);
     cam.y += this.lift;
   }
 

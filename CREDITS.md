@@ -12,6 +12,8 @@ Lechovia Skies uses these free-license assets and the owner's own aircraft model
 | Aircraft models `models/shade.glb` (F-35A-inspired, flown as the Shade) and `models/prizrak.glb` (Su-57-inspired, flown as the Prizrak), simplified, re-oriented and with resized textures by `tools/prepare-models.ts` | Generated with Tripo (https://www.tripo3d.ai) | Hiroto Matsui (project owner) | The owner's generated models; Tripo's terms of service apply |
 | Soundtrack `public/audio/life-in-the-danger-zone.mp3` ("Life in the Danger Zone", hybrid trailer music; re-encoded at 128 kbps), chosen by the owner | Pixabay (file 304406) | DJARTMUSIC | Pixabay Content License (no attribution required; credited anyway) |
 | three.js library | https://threejs.org | three.js authors | MIT |
+| Trystero (`@trystero-p2p/core`, `nostr`, `ws-relay`): browsers finding each other for online play, over WebRTC | https://github.com/dmotz/trystero | Dan Motzenbecker | MIT |
+| noble-secp256k1 (bundled by Trystero's Nostr strategy) | https://github.com/paulmillr/noble-secp256k1 | Paul Miller | MIT |
 | Display font Rajdhani (Latin subset, weights 600 and 700), bundled from the `@fontsource/rajdhani` package | https://fonts.google.com/specimen/Rajdhani | Indian Type Foundry | [SIL Open Font License 1.1](https://openfontlicense.org) (full text: `node_modules/@fontsource/rajdhani/LICENSE`) |
 
 Satellite imagery attribution, as required by CC BY 4.0:

@@ -3,7 +3,7 @@ import { BotPilot, type BotWorld, botSeed } from '../ai/bot-pilot.ts';
 import { DronePilot } from '../ai/drone-pilot.ts';
 import { SentinelPilot } from '../ai/sentinel-pilot.ts';
 import type { DifficultyProfile } from '../ai/difficulty.ts';
-import { damageFlightEnv, damageState, maneuverKillCredit } from '../damage/damage.ts';
+import { maneuverKillCredit } from '../damage/damage.ts';
 import { getAircraft } from '../data/aircraft/registry.ts';
 import type { AircraftPhysics, TeamId } from '../data/aircraft/types.ts';
 import type { MapDefinition } from '../data/maps/map-definition.ts';
@@ -15,18 +15,19 @@ import type { BotGoal, DroneSpec, GameMode, ModeDirector, SupportSpec } from '..
 import { trimAlpha } from '../physics/aero.ts';
 import { atmosphere } from '../physics/atmosphere.ts';
 import { type ControlInput, neutralInput, sanitizeInput } from '../physics/controls.ts';
-import { createFlightState, type FlightEnv, type FlightState, stepFlight } from '../physics/flight-model.ts';
-import { slumpedInput, updateStrain } from '../physics/g-tolerance.ts';
+import { createFlightState, type FlightState } from '../physics/flight-model.ts';
+import { slumpedInput } from '../physics/g-tolerance.ts';
 import { WindField } from '../physics/wind.ts';
 import type { Projectile } from '../weapons/cannon.ts';
 import type { Bomb } from '../weapons/bomb.ts';
 import type { Missile } from '../weapons/missile.ts';
 import { Combat, type CombatHost } from './combat.ts';
+import { type FlyContext, flyTick } from './fly.ts';
 import { type AircraftEntity, createAircraftEntity, resetForSpawn } from './entities.ts';
 import type { DeathCause, GameEvent, WeaponKind } from './events.ts';
 import { createGroundTarget, damageGroundTarget, type GroundTarget } from './ground-targets.ts';
 import { runwayFlightState, type SpawnStart, spawnFlightState, teamAirfield } from './spawns.ts';
-import { needsSupply, onApproach, resupply, SUPPLY_LANDED_S, SUPPLY_PASS_S, supplyAt, type SupplyKind } from './supply.ts';
+import { needsSupply, resupply, SUPPLY_LANDED_S, SUPPLY_PASS_S, supplyAt, type SupplyKind } from './supply.ts';
 import { CALM_NOON, type EnvironmentSettings, hourAt } from './time-of-day.ts';
 import { CloudField, WEATHER } from './weather.ts';
 
@@ -111,7 +112,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
   private readonly bots = new Map<number, { pilot: Pilot; input: ControlInput }>();
   private events: GameEvent[] = [];
   private nextId = 1;
-  private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1, groundM: NaN, wind: new Vector3(), fuelUsedKg: 0, gearWanted: false };
+  private readonly fly: FlyContext;
   private readonly approach: Approach = { distance: 0, fraction: 0 };
   private readonly living: AircraftEntity[] = [];
 
@@ -125,6 +126,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     // The clouds belong to the map and the weather, so every client draws the same ones.
     this.clouds = new CloudField(WEATHER[this.environment.weather], opts.map.seed);
     this.wind = windFor(this.environment, opts.seed);
+    this.fly = { features: opts.map.features, wind: this.wind, timeS: 0, env: { thrustScale: 1, rollScale: 1, groundM: NaN, wind: new Vector3(), fuelUsedKg: 0, gearWanted: false } };
     opts.mode.prepare?.(opts.map);
     this.groundTargets = opts.mode.groundTargets(opts.map).map((spec) => createGroundTarget(spec, opts.terrain));
     this.combat = new Combat(this);
@@ -355,27 +357,17 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       // A blacked-out pilot's hands are slumped on the stick, whatever they or their AI would do (revision 21).
       if (a.blackoutTick >= 0) slumpedInput(a.input, a.flight.quat);
     }
-    const timeS = this.tick * DT;
+    const fly = this.fly;
+    fly.wind = this.wind;
+    fly.timeS = this.tick * DT;
     for (const a of this.aircraft.values()) {
       if (!a.alive) continue;
       a.prevPos.copy(a.flight.pos);
-      const env = this.env;
-      damageFlightEnv(damageState(a.hp, a.config.damage.hitPoints), env);
-      // An empty tank flames the engines out (revision 16).
-      if (a.stores.fuelKg <= 0) env.thrustScale = 0;
-      env.groundM = airfieldGroundHeight(this.map.features, a.flight.pos.x, a.flight.pos.z);
-      this.wind.at(a.flight.pos, timeS, env.wind);
-      env.fuelUsedKg = a.config.physics.fuelKg - a.stores.fuelKg;
-      env.gearWanted = onApproach(this.map.features, a.team, a.flight);
-      stepFlight(a.flight, a.input, a.config.physics, DT, env);
-      a.stores.fuelKg = Math.max(0, a.stores.fuelKg - a.flight.fuelFlow * DT);
+      const blackedOut = flyTick(a, fly, DT);
       a.history.record(a.flight.pos, a.flight.vel);
-      if (a.blackoutTick < 0) {
-        a.gStrain = updateStrain(a.gStrain, a.flight.gLoad, DT);
-        if (a.gStrain >= 1) {
-          a.blackoutTick = this.tick;
-          this.emit({ type: 'blackout', aircraftId: a.id });
-        }
+      if (blackedOut) {
+        a.blackoutTick = this.tick;
+        this.emit({ type: 'blackout', aircraftId: a.id });
       }
     }
     if (this.mode.combatEnabled) this.combat.step(DT);
@@ -548,7 +540,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
 }
 
 /** The match's wind: the weather's, from a direction drawn from the seed, or none in a calm. */
-function windFor(env: EnvironmentSettings, seed: number): WindField {
+export function windFor(env: EnvironmentSettings, seed: number): WindField {
   return env.calm ? new WindField({ surfaceMs: 0, aloftMs: 0, gust: 0, fromRad: 0 }, seed) : WindField.forWeather(WEATHER[env.weather], seed);
 }
 

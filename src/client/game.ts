@@ -7,6 +7,7 @@ import { BOMB_ANVIL, CANNONS } from '../shared/data/weapons.ts';
 import { timeToImpact } from '../shared/map/ground-proximity.ts';
 import { clamp, DEG } from '../shared/math/units.ts';
 import type { GameMode } from '../shared/modes/mode.ts';
+import { QUICK_CHAT } from '../shared/net/protocol.ts';
 import { createMode } from '../shared/modes/registry.ts';
 import { STRIKE_AIRCRAFT_PER_PILOT } from '../shared/modes/strike.ts';
 import { atmosphere } from '../shared/physics/atmosphere.ts';
@@ -53,6 +54,10 @@ import { createTerrainMaterial } from './render/terrain-material.ts';
 import { TrainingRings } from './render/training-rings.ts';
 import type { GameSession } from './session/game-session.ts';
 import { LocalSession } from './session/local-session.ts';
+import type { HostSession } from './session/host-session.ts';
+import type { NetworkSession } from './session/network-session.ts';
+import { CHAT_KEYS, hostOnline, inviteLink, joinOnline } from './net/online.ts';
+import { BackgroundTicker } from './net/background-ticker.ts';
 import { DebugOverlay } from './ui/debug-overlay.ts';
 import { matchResult, type ResultRow, showEndScreen } from './ui/end-screen.ts';
 import { MatchStats } from './match-stats.ts';
@@ -65,8 +70,11 @@ import { loadCampaign, saveCampaign } from './campaign/progress.ts';
 import { bestLine } from './ui/records-format.ts';
 import { MapScreen } from './ui/map-screen.ts';
 import { loadingText } from './ui/load-bar.ts';
-import type { StartOptions } from './ui/menu.ts';
+import type { MissionId, StartOptions } from './ui/menu.ts';
 import { PauseMenu } from './ui/pause.ts';
+import { onlinePanel, type RoomInfo } from './ui/online-panel.ts';
+import { ConnectionOverlay } from './ui/connection-overlay.ts';
+import { neutralInput } from '../shared/physics/controls.ts';
 import { freeFlightPanel } from './ui/free-flight-panel.ts';
 import { openSettings } from './ui/settings-screen.ts';
 import type { Settings, SettingsStore } from './ui/settings.ts';
@@ -158,41 +166,78 @@ export async function startGame(
   }
   // Never rejects: a jet whose model fails to load uses its generated model.
   const meshes = await aircraftMeshes;
-  // The map is the player's choice; Strike and Training keep the Test Range.
-  const mapId: MapId = options.mission === 'strike' || options.mission === 'training' ? 'test-range' : (options.map ?? 'lechovia');
-  let loadedMap: LoadedMap;
-  try {
-    loadedMap = await loadMap(mapId, progress);
-  } catch (err) {
+  const fail = (err: unknown, prefix = '') => {
     renderer.dispose();
     audio?.dispose();
     stopLoadingText();
     loading.remove();
-    throw new Error(`Could not build the map: ${err instanceof Error ? err.message : String(err)}`);
+    return new Error(`${prefix}${err instanceof Error ? err.message : String(err)}`);
+  };
+  // Online (revision 28): a pilot joins a room and flies on whichever map its host chose; a host opens a room here.
+  const online = options.online ?? null;
+  const pilot = { callsign: options.callsign, aircraftId: options.aircraftId, start: options.start ?? 'air' };
+  let net: NetworkSession | null = null;
+  let hosted: HostSession | null = null;
+  let loadedMap: LoadedMap;
+  if (online?.role === 'join') {
+    stopLoadingText();
+    loading.firstElementChild!.textContent = `Joining room ${online.code}…`;
+    let joinedMap: LoadedMap | null = null;
+    try {
+      net = await joinOnline(online.code, pilot, async (id) => {
+        joinedMap = await loadMap(id, progress);
+        return { map: joinedMap.def, terrain: joinedMap.terrain };
+      });
+    } catch (err) {
+      throw fail(err);
+    }
+    loadedMap = joinedMap!;
+  } else {
+    // The map is the player's choice; Strike and Training keep the Test Range.
+    const mapId: MapId = options.mission === 'strike' || options.mission === 'training' ? 'test-range' : (options.map ?? 'lechovia');
+    try {
+      loadedMap = await loadMap(mapId, progress);
+    } catch (err) {
+      throw fail(err, 'Could not build the map: ');
+    }
   }
   const map = loadedMap.def;
   const terrain = loadedMap.terrain;
   const teamSize = Math.max(1, options.teamSize ?? 1);
   const enemies = Math.max(1, options.enemies ?? teamSize);
-  const mode = modeFor(options);
-  const session: GameSession = new LocalSession({
-    map,
-    terrain,
-    mode,
-    aircraftId: options.aircraftId,
-    callsign: options.callsign,
-    // A fresh seed per match varies gunfire spread, flare luck and the bot's aim; the World stays deterministic.
-    seed: Math.floor(Math.random() * 0x7fffffff),
-    // Training brings its own drones; Free Flight has no enemies.
-    opponents: options.mission === 'free-flight' || options.mission === 'training' ? undefined : { count: enemies, profile: DIFFICULTIES[options.difficulty] },
-    wingmen:
-      options.mission === 'free-flight' || options.mission === 'training' || teamSize < 2
-        ? undefined
-        : { count: teamSize - 1, profile: DIFFICULTIES[options.wingmenDifficulty ?? options.difficulty] },
-    start: options.start,
-    // Training flies a calm noon.
-    environment: options.mission === 'training' ? undefined : options.environment,
-  });
+  if (online?.role === 'host') {
+    stopLoadingText();
+    loading.firstElementChild!.textContent = 'Opening the room…';
+    try {
+      hosted = await hostOnline(online.settings, pilot, map, terrain);
+    } catch (err) {
+      throw fail(err, 'Could not open the room: ');
+    }
+  }
+  /** the match online: the host's room, or the room joined; null in single player */
+  const onlineSession = hosted ?? net;
+  /** what is flown: online, the room's mode */
+  const mission: MissionId = net ? net.modeId : options.mission;
+  const session: GameSession =
+    onlineSession ??
+    new LocalSession({
+      map,
+      terrain,
+      mode: modeFor(options),
+      aircraftId: options.aircraftId,
+      callsign: options.callsign,
+      // A fresh seed per match varies gunfire spread, flare luck and the bot's aim; the World stays deterministic.
+      seed: Math.floor(Math.random() * 0x7fffffff),
+      // Training brings its own drones; Free Flight has no enemies.
+      opponents: options.mission === 'free-flight' || options.mission === 'training' ? undefined : { count: enemies, profile: DIFFICULTIES[options.difficulty] },
+      wingmen:
+        options.mission === 'free-flight' || options.mission === 'training' || teamSize < 2
+          ? undefined
+          : { count: teamSize - 1, profile: DIFFICULTIES[options.wingmenDifficulty ?? options.difficulty] },
+      start: options.start,
+      // Training flies a calm noon.
+      environment: options.mission === 'training' ? undefined : options.environment,
+    });
   const ground = new TerrainLod(loadedMap, createTerrainMaterial(textures), QUALITY_PRESETS[quality].terrainDetail);
   renderer.scene.add(ground.group);
   const worldFeatures = new WorldFeatures(map, terrain);
@@ -269,7 +314,7 @@ export async function startGame(
   // For the end-of-match summary (M5).
   const stats = new MatchStats();
   // Free Flight (M5): the map flies you from wherever you click; the mouse is set free while it is open.
-  const freeFlight = options.mission === 'free-flight';
+  const freeFlight = mission === 'free-flight';
   const mapScreen = new MapScreen(root, map, terrain, { combatArea: !freeFlight });
   if (freeFlight) {
     mapScreen.onPick = (x, z) => {
@@ -328,11 +373,19 @@ export async function startGame(
   const lastListener = new Vector3();
   const forward = new Vector3();
   const upward = new Vector3();
-  const canChangeJet = options.mission !== 'training';
+  const canChangeJet = mission !== 'training';
   // The jets to change to: those open at the pilot's level (revision 26), and the one this match started with.
   const pilotLevel = levelForXp(careerXp(loadCareer()));
   const changeableJets = (team: TeamId) => listAircraft(team).filter((j) => j.id === options.aircraftId || isUnlocked(j.id, pilotLevel));
 
+  /** online: neutral stick and the throttle held while the menu or the results are up */
+  const idle = neutralInput(0.8);
+  const roomCode = hosted ? hosted.code : online?.role === 'join' ? online.code : '';
+  const roomInfo = (): RoomInfo => ({
+    code: roomCode,
+    line: hosted ? `You are hosting · ${hosted.room.pilotCount + 1} pilots` : `Hosted by ${net?.hostCallsign ?? ''}`,
+    invite: inviteLink(roomCode, location),
+  });
   const pause = new PauseMenu(root, {
     onResume: () => {
       pause.hide();
@@ -354,6 +407,9 @@ export async function startGame(
     },
   }, {
     extra: freeFlight ? freeFlightPanel(session) : undefined,
+    online: onlineSession ? onlinePanel(roomInfo) : undefined,
+    note: onlineSession ? 'Online, the match goes on: your jet flies straight on.' : undefined,
+    quitLabel: hosted ? 'Close the room' : net ? 'Leave the room' : undefined,
   });
   const openPause = () => {
     if (paused) return;
@@ -361,6 +417,59 @@ export async function startGame(
     audio?.quiet();
     pause.show();
   };
+  // Online (revision 28): the room's code in a corner, why it closed, and a hidden tab that keeps the match going.
+  const badge = onlineSession ? document.createElement('div') : null;
+  if (badge) {
+    badge.className = 'room-badge';
+    root.appendChild(badge);
+  }
+  let badgeAt = -Infinity;
+  const updateBadge = (nowS: number) => {
+    if (!badge || nowS - badgeAt < 0.5) return;
+    badgeAt = nowS;
+    badge.textContent = hosted ? `ROOM ${roomCode} · ${hosted.room.pilotCount + 1} PILOTS` : `ROOM ${roomCode} · ${Math.round(net?.rttMs ?? 0)} MS`;
+  };
+  const connection = net ? new ConnectionOverlay(root) : null;
+  if (net) {
+    net.onClosed = (reason) => {
+      if (!running) return;
+      if (input.pointerLocked) document.exitPointerLock();
+      pause.hide();
+      closeEndScreen?.();
+      closeEndScreen = null;
+      connection?.show('The room has closed', reason, [
+        [
+          'Back to the title screen',
+          () => {
+            cleanup();
+            handlers.onQuit();
+          },
+        ],
+      ]);
+    };
+  }
+  /** steps an online match while the tab is hidden: no frames are drawn then */
+  const backgroundStep = () => {
+    if (!running || !document.hidden || !onlineSession) return;
+    const now = performance.now();
+    const me = session.localView();
+    if (me) idle.throttle = me.flight.throttle;
+    session.update(clamp((now - last) / 1000, 0, 0.25), idle);
+    last = now;
+    if (onlineSession.consumeMatchStart()) nextMatch();
+    for (const e of session.drainEvents()) handleEvent(e, now / 1000);
+    if (!matchOver && session.modeStatus().winner !== null) endMatch();
+  };
+  const ticker = onlineSession ? new BackgroundTicker(backgroundStep) : null;
+  const onVisibility = () => {
+    if (!ticker) return;
+    if (document.hidden) ticker.start();
+    else {
+      ticker.stop();
+      last = performance.now();
+    }
+  };
+  document.addEventListener('visibilitychange', onVisibility);
   // Browsers swallow Esc while the pointer is locked and release the lock instead: treat that as "pause".
   const onPointerLockChange = () => {
     if (running && !matchOver && !input.pointerLocked && !paused && !(freeFlight && mapScreen.open)) openPause();
@@ -373,6 +482,7 @@ export async function startGame(
     banner = text;
     bannerUntil = nowS + seconds;
   };
+  if (hosted) showBanner(`ROOM ${roomCode} · INVITE FRIENDS FROM THE PAUSE MENU`, performance.now() / 1000, 6);
   const campaignMission = options.campaign ? missionById(options.campaign.missionId) : undefined;
   let missionAnnounced = false;
 
@@ -464,7 +574,7 @@ export async function startGame(
 
   const endMatch = () => {
     matchOver = true;
-    const training = options.mission === 'training';
+    const training = mission === 'training';
     audio?.quiet();
     if (input.pointerLocked) document.exitPointerLock();
     const me = session.localView();
@@ -502,7 +612,7 @@ export async function startGame(
       const before = loadCareer();
       const { career, newBests } = recordMatch(before, {
         at: new Date().toISOString(),
-        mode: options.mission,
+        mode: mission,
         aircraftId: me.config.id,
         result: final.winner === me.team ? 'win' : final.winner === 'draw' ? 'draw' : 'loss',
         kills: me.kills,
@@ -543,9 +653,16 @@ export async function startGame(
       }
     }
     audio?.matchEnd(training || (me && final.winner === me.team) ? 'win' : final.winner === 'draw' ? 'draw' : 'loss');
+    // Online (revision 28): the room goes on to its next match by itself.
+    if (onlineSession) result.note = [result.note, 'The next match in this room starts in a few seconds.'].filter(Boolean).join(' ');
     closeEndScreen = showEndScreen(root, result, rows, {
-      againLabel,
+      againLabel: onlineSession ? 'Stay for the next match' : againLabel,
       onAgain: () => {
+        if (onlineSession) {
+          closeEndScreen?.();
+          closeEndScreen = null;
+          return;
+        }
         cleanup();
         handlers.onRestart(again);
       },
@@ -556,12 +673,27 @@ export async function startGame(
     }, flight, bests);
   };
 
+  /** Online: the room started its next match (new jets, fresh scores). */
+  const nextMatch = () => {
+    closeEndScreen?.();
+    closeEndScreen = null;
+    stats.reset();
+    matchOver = false;
+    spawnGen = -1;
+    deathMessage = null;
+    deathCam.stop();
+    killFeed.clear();
+    if (!paused) input.requestPointerLock();
+  };
+
   const frame = (now: number) => {
     if (!running) return;
     const nowS = now / 1000;
     // Never negative: a frame's timestamp can come before a performance.now() read just before it (at the start, or
     // on resuming), and a negative step would throw the camera's easing and shake the wrong way.
     const dt = clamp((now - last) / 1000, 0, 0.1);
+    // Online a slow frame still has to send every input the host's clock asks for (down to 4 fps).
+    const stepS = onlineSession ? clamp((now - last) / 1000, 0, 0.25) : dt;
     last = now;
     const snap = input.snapshot();
     const padFrame = pad.read(pollGamepad(), settings.current.gamepad);
@@ -587,7 +719,9 @@ export async function startGame(
     }
 
     const active = !paused && !matchOver;
-    if (active) {
+    if (onlineSession?.consumeMatchStart()) nextMatch();
+    // Online the match never pauses: with the menu or the results up, the jet flies on with the stick centred.
+    if (active || onlineSession) {
       const me = session.localView();
       if (me && me.spawnGen !== spawnGen) {
         spawnGen = me.spawnGen;
@@ -611,10 +745,19 @@ export async function startGame(
       // The gear motor runs as the wheels start to come up, or down on approach (revision 22).
       if (me && me.alive && ((me.flight.gear < 1 && lastGear >= 1) || (me.flight.gear > 0 && lastGear <= 0))) audio?.gearMotor();
       lastGear = me?.flight.gear ?? 0;
-      const controls = mapper.map(snap, me && me.alive ? me.flight : null, dt, padFrame);
-      session.update(dt, controls);
+      if (!active && me) idle.throttle = me.flight.throttle;
+      const controls = active ? mapper.map(snap, me && me.alive ? me.flight : null, dt, padFrame) : idle;
+      session.update(stepS, controls);
       for (const e of session.drainEvents()) handleEvent(e, nowS);
-      if (me) stats.sampleFlight(me.alive, me.flight.onGround, me.flight.airspeed, me.flight.gLoad, dt);
+      if (me && active) stats.sampleFlight(me.alive, me.flight.onGround, me.flight.airspeed, me.flight.gLoad, dt);
+      if (onlineSession) {
+        // Quick chat (revision 28): 7, 8, 9 and 0 send the preset lines.
+        if (active) CHAT_KEYS.forEach((code, i) => snap.pressed.has(code) && onlineSession.sendChat(i));
+        for (const c of onlineSession.drainChat()) {
+          const from = session.view(c.from);
+          killFeed.add(`${from?.callsign ?? 'Someone'}: ${QUICK_CHAT[c.index] ?? ''}`, from?.team ?? 'usa', c.from === session.localId);
+        }
+      }
       // A touchdown starts the roll-out; stopping or flying again ends it (revision 22).
       if (me && me.alive) {
         const onGround = me.flight.onGround;
@@ -648,7 +791,7 @@ export async function startGame(
       const meNow = session.localView();
       if (meNow && !meNow.alive && deathCam.phase !== 'off') {
         deathCam.update(dt, session.views(), meNow.team);
-        const c = mapper.deathControls(snap, padFrame.active ? padFrame : null);
+        const c = active ? mapper.deathControls(snap, padFrame.active ? padFrame : null) : { watch: 0, jet: 0 };
         if (c.watch !== 0) {
           deathCam.cycle(session.views(), meNow.team, c.watch);
           cameraRig.reset();
@@ -842,6 +985,7 @@ export async function startGame(
       hud.draw(null);
     }
     mapScreen.draw(session.localView(), session.views(), session.groundTargets(), session.modeStatus());
+    updateBadge(nowS);
     rafId = requestAnimationFrame(frame);
   };
   rafId = requestAnimationFrame(frame);
@@ -850,6 +994,10 @@ export async function startGame(
   function cleanup(): void {
     running = false;
     cancelAnimationFrame(rafId);
+    ticker?.stop();
+    document.removeEventListener('visibilitychange', onVisibility);
+    badge?.remove();
+    connection?.dispose();
     stopSettings();
     debug?.dispose();
     document.removeEventListener('pointerlockchange', onPointerLockChange);

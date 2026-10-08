@@ -15,6 +15,7 @@ import { isTouchOnly } from './device.ts';
 import { fullscreenButton } from './fullscreen.ts';
 import { MISSION_LABELS } from './records-format.ts';
 import { campaignSheet } from './campaign-sheet.ts';
+import { type OnlineStart, onlineSheet } from './online-sheet.ts';
 import { recordsSheet } from './records-sheet.ts';
 import { choiceGroup, el } from './choice-group.ts';
 import { openSettings } from './settings-screen.ts';
@@ -45,6 +46,8 @@ export interface StartOptions {
   scoreLimit?: number;
   /** a campaign mission (revision 18) */
   campaign?: { missionId: string };
+  /** online play (revision 28): host a room with these settings, or join one by its code */
+  online?: OnlineStart;
 }
 
 export interface StartMenuHandlers {
@@ -265,8 +268,14 @@ function levelBadge(p: ReturnType<typeof levelProgress>): HTMLElement {
   return box;
 }
 
+/** Opens the Online sheet as the title screen shows: with an invite link's code, or after a failed online start. */
+export interface OnlineOpening {
+  code?: string;
+  error?: string;
+}
+
 /** Shows the title screen over the live scene. Returns a cleanup function that removes it. */
-export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, settings: SettingsStore): () => void {
+export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, settings: SettingsStore, online?: OnlineOpening): () => void {
   const aircraft = listAircraft();
   // Pilot level (revision 26): the jets open as it rises; a saved jet still locked falls back to an open one.
   const progress = levelProgress(careerXp(loadCareer()));
@@ -375,8 +384,12 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   campaignButton.type = 'button';
   campaignButton.title = 'Nine missions in order, for either side';
   campaignButton.setAttribute('aria-haspopup', 'dialog');
+  const onlineButton = el('button', 'campaign-button online-button', 'Online');
+  onlineButton.type = 'button';
+  onlineButton.title = 'Fly with friends: host a room or join one with its code';
+  onlineButton.setAttribute('aria-haspopup', 'dialog');
   const launchRow = el('div', 'launch-row');
-  launchRow.append(fly, campaignButton);
+  launchRow.append(fly, campaignButton, onlineButton);
   const links = el('div', 'links');
   const training = el('button', 'link', 'Training');
   training.type = 'button';
@@ -412,7 +425,31 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
       handlers.onStart(options);
     },
   );
-  screen.append(form, sheet, records.dialog, campaign.dialog);
+  const onlineDialog = onlineSheet(
+    () => {
+      const w = effectiveWorld(world, 'team-deathmatch');
+      return { map: w.map, environment: environmentOf(w) };
+    },
+    (choice) => {
+      const w = effectiveWorld(world, choice.role === 'host' ? choice.settings.mode : 'team-deathmatch');
+      const options: StartOptions = {
+        aircraftId,
+        callsign: sanitizeCallsign(callsign.value),
+        controlMode: settings.current.controlMode,
+        mission: choice.role === 'host' ? choice.settings.mode : 'team-deathmatch',
+        difficulty,
+        map: choice.role === 'host' ? choice.settings.map : w.map,
+        start: w.start,
+        environment: choice.role === 'host' ? choice.settings.environment : environmentOf(w),
+        teamSize: choice.role === 'host' ? choice.settings.teamSize : 1,
+        online: choice,
+      };
+      saveSetting('aircraft', options.aircraftId);
+      saveSetting('callsign', options.callsign);
+      handlers.onStart(options);
+    },
+  );
+  screen.append(form, sheet, records.dialog, campaign.dialog, onlineDialog.dialog);
 
   const start = (mission: MissionId) => {
     const w = effectiveWorld(world, mission);
@@ -441,12 +478,14 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   controlsLink.addEventListener('click', () => sheet.showModal());
   recordsLink.addEventListener('click', () => records.open());
   campaignButton.addEventListener('click', () => campaign.open());
+  onlineButton.addEventListener('click', () => onlineDialog.open());
   settingsLink.addEventListener('click', () => openSettings(root, settings, 'controls'));
 
   root.appendChild(screen);
   handlers.onPreview(aircraftId);
   handlers.onWorld?.(environmentOf(world));
   fly.focus();
+  if (online) onlineDialog.open(online.code, online.error);
   return () => {
     fullscreen.dispose();
     screen.remove();

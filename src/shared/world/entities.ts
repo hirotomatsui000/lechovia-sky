@@ -68,8 +68,10 @@ export interface AircraftEntity extends CreditRecord {
   readonly radarLock: RadarLockState;
   /** RWR: an enemy radar lock, or a Lance its launcher still guides, is on this aircraft (spec §10.3) */
   lockedByRadar: boolean;
-  /** recent motion, for the bots' reaction delay */
+  /** recent motion, for the bots' reaction delay and online lag compensation */
   readonly history: MotionHistory;
+  /** online (revision 28): how many ticks behind this pilot sees the others; their gunfire is judged that far back */
+  viewDelayTicks: number;
   /** where this aircraft starts after each death: in the air or on the runway (M4) */
   start: SpawnStart;
   /** a mode-flown support aircraft (a Sentinel, M5); null for fighters */
@@ -135,6 +137,7 @@ export function createAircraftEntity(n: NewAircraft): AircraftEntity {
     radarLock: createRadarLock(),
     lockedByRadar: false,
     history: new MotionHistory(),
+    viewDelayTicks: 0,
     lastDamagedBy: null,
     lastDamagedTick: -1,
     lastLockedBy: null,

@@ -303,3 +303,29 @@ describe('World combat', () => {
     expect(damaged.target.flight.vel.length()).toBeLessThan(healthy.target.flight.vel.length() - 1);
   });
 });
+
+describe('lag compensation online (revision 28)', () => {
+  /** A fast crossing target that passes the shooter's line of fire before the burst arrives. */
+  function crossing(viewDelayTicks: number) {
+    const { world, shooter, target } = duel();
+    place(shooter, 0, 3000, 100, 0, 250);
+    place(target, -25, 3000, 0, 90, 300);
+    shooter.viewDelayTicks = viewDelayTicks;
+    return run(world, 30, (t) => hold(shooter.id, { fireCannon: t >= 6 && t <= 16 })).filter((e) => e.type === 'hit' && e.aircraftId === target.id);
+  }
+
+  it('misses a target that has already crossed when the shooter sees the world as it is', () => {
+    expect(crossing(0)).toHaveLength(0);
+  });
+
+  it('hits where the shooter saw the target, rewound by the view delay', () => {
+    expect(crossing(10).length).toBeGreaterThan(0);
+  });
+
+  it('caps the rewind at 15 ticks (250 ms)', () => {
+    const { world, shooter } = duel();
+    shooter.viewDelayTicks = 600;
+    run(world, 1, () => hold(shooter.id, { fireCannon: true }));
+    expect(world.projectileList()[0].rewindTicks).toBe(15);
+  });
+});

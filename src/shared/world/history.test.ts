@@ -41,3 +41,17 @@ describe('MotionHistory', () => {
     expect(h.length).toBe(0);
   });
 });
+
+describe('MotionHistory.sampleAt', () => {
+  it('returns recorded positions and velocities, clamped to the oldest', () => {
+    const h = new MotionHistory(4);
+    for (let i = 0; i < 6; i++) h.record(new Vector3(i, 0, 0), new Vector3(0, i, 0));
+    const pos = new Vector3();
+    const vel = new Vector3();
+    expect(h.sampleAt(0, pos, vel) && pos.x).toBe(5);
+    expect(vel.y).toBe(5);
+    expect(h.sampleAt(2, pos) && pos.x).toBe(3);
+    expect(h.sampleAt(99, pos) && pos.x).toBe(2);
+    expect(new MotionHistory().sampleAt(0, pos)).toBe(false);
+  });
+});

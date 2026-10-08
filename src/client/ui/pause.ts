@@ -9,16 +9,24 @@ export interface PauseHandlers {
 export interface PauseOptions {
   /** an extra section under the buttons (Free Flight's sky and drones, M5) */
   extra?: { element: HTMLElement; refresh(): void };
+  /** online (revision 28): the room's code and invite link, above the buttons */
+  online?: { element: HTMLElement; refresh(): void };
+  /** a line under the title (online: the match goes on) */
+  note?: string;
+  /** the last button's text */
+  quitLabel?: string;
 }
 
 /** Resume, Settings (the same dialog as the title screen's) and Quit. */
 export class PauseMenu {
   private readonly overlay = document.createElement('div');
   private readonly extra: PauseOptions['extra'];
+  private readonly online: PauseOptions['online'];
   private readonly fullscreen = fullscreenButton('button secondary');
 
   constructor(root: HTMLElement, handlers: PauseHandlers, options: PauseOptions = {}) {
     this.extra = options.extra;
+    this.online = options.online;
     this.overlay.className = 'overlay translucent';
     this.overlay.hidden = true;
     const panel = document.createElement('div');
@@ -27,11 +35,18 @@ export class PauseMenu {
     title.textContent = 'Paused';
     title.style.margin = '0 0 8px';
     panel.appendChild(title);
+    if (options.note) {
+      const note = document.createElement('p');
+      note.className = 'subtitle';
+      note.textContent = options.note;
+      panel.appendChild(note);
+    }
+    if (options.online) panel.appendChild(options.online.element);
     panel.append(
       this.button('Resume', 'button', () => handlers.onResume()),
       this.button('Settings', 'button secondary', () => handlers.onSettings()),
       this.fullscreen.button,
-      this.button('Quit to menu', 'button secondary', () => handlers.onQuit()),
+      this.button(options.quitLabel ?? 'Quit to menu', 'button secondary', () => handlers.onQuit()),
     );
     if (options.extra) panel.appendChild(options.extra.element);
     this.overlay.appendChild(panel);
@@ -44,6 +59,7 @@ export class PauseMenu {
 
   show(): void {
     this.extra?.refresh();
+    this.online?.refresh();
     this.overlay.hidden = false;
   }
 

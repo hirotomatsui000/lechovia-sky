@@ -9,8 +9,15 @@ is rebuilt after every push ([Publish as a website](#publish-as-a-website)). The
 2026-10-03; settings, records and campaign progress saved under that name carry over.
 
 **Current milestone: M5 "Modes & polish"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
-"Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02: the game is
-single player against AI pilots and runs entirely in the browser.
+"Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02 and came back
+on 2026-10-08 without any server: the game still runs entirely in the browser.
+- **Online play** (2026-10-08): **Online** on the title screen. One of you hosts a room (Dogfight, Air Superiority,
+  Team Objective, Free Flight or Strike; 1, 2 or 4 pilots a side, AI pilots in the empty seats) and gets a six-letter
+  code; up to seven friends join with the code or the invite link (pause menu: *Copy invite link*). The match runs in
+  the host's browser and the others connect straight to it (WebRTC, found through public Nostr relays), so the host
+  keeps the game open; the next match starts by itself after the results. Online the game never pauses. 7, 8, 9 and 0
+  send quick-chat lines. Some networks block direct links between browsers: then someone else has to host. The others
+  in a room can see your IP address, as in most peer-to-peer games.
 - **Polish towns** (2026-10-07): the cities have old towns of pastel tenements round a market square with the town
   hall and a red-brick Gothic church, estates of panel blocks, streets of houses, and factories with striped chimneys;
   the capital has its palace-of-culture tower and glass towers, the port its Hanseatic gables, Odrzyn a power station

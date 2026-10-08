@@ -10,7 +10,8 @@ import { Showcase } from './render/showcase.ts';
 import { type LoadedMap, loadMap } from './render/terrain/map-loader.ts';
 import { showIntro } from './ui/intro-screen.ts';
 import { showLoadBar } from './ui/load-bar.ts';
-import { type StartOptions, showStartMenu } from './ui/menu.ts';
+import { type OnlineOpening, type StartOptions, showStartMenu } from './ui/menu.ts';
+import { parseRoomCode } from '../shared/net/protocol.ts';
 import { SettingsStore } from './ui/settings.ts';
 
 function requireElement(id: string): HTMLElement {
@@ -48,13 +49,16 @@ function run(scenery: Promise<SceneryTextures>, world: Promise<LoadedMap>, aircr
   const music = new MusicPlayer(settings);
   const launch = (options: StartOptions): void => {
     music.setScene('flight');
-    startGame(app, options, { onQuit: showMenu, onRestart: launch }, scenery, aircraftMeshes, settings, progress).catch((err: unknown) => {
+    startGame(app, options, { onQuit: () => showMenu(), onRestart: launch }, scenery, aircraftMeshes, settings, progress).catch((err: unknown) => {
       console.error(err);
-      showError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      // Online (revision 28): back to the title screen, with the reason in the Online sheet.
+      if (options.online) showMenu({ code: options.online.role === 'join' ? options.online.code : undefined, error: message });
+      else showError(message);
     });
   };
 
-  function showMenu(): void {
+  function showMenu(online?: OnlineOpening): void {
     music.setScene('menu');
     const s = settings.current;
     const quality = QUALITY_PRESETS[resolveQuality(s.graphics, s.autoGraphics, window.innerWidth, window.innerHeight, window.devicePixelRatio)];
@@ -67,10 +71,13 @@ function run(scenery: Promise<SceneryTextures>, world: Promise<LoadedMap>, aircr
         showcase.dispose();
         launch(options);
       },
-    }, settings);
+    }, settings, online);
   }
 
-  showMenu();
+  // An invite link (revision 28): the title screen opens on the Online sheet with the room's code.
+  const invited = new URLSearchParams(location.search).get('join');
+  const code = invited ? parseRoomCode(invited) : null;
+  showMenu(code ? { code } : undefined);
 }
 
 if (Renderer.isWebGLAvailable()) {

@@ -1,4 +1,4 @@
-# Lechovia Skies — Design Spec (revision 27)
+# Lechovia Skies — Design Spec (revision 28)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -98,13 +98,17 @@
     detached houses, street villages with barns, highlander houses in the mountains, industry, the capital's palace
     tower and glass towers, and a brick castle, built from textured, merged meshes with windows that light at night
     (§12.3, §18).
+  - Revision 28 (2026-10-08): at the owner's request **online play is back**, without a server: one pilot hosts a room
+    in their browser and up to seven others join it with a six-letter code or an invite link, over WebRTC (§7.1). The
+    rules, protocol and prediction follow M2 (§7); the World's per-aircraft flight step is shared with the prediction,
+    and cannon lag compensation returns.
 - **Owner:** Hiroto Matsui
 - **Title:** Lechovia Skies (`lechovia-skies`); the working title until revision 19 was Contested Skies.
 
 ## 1. Summary
 
 A browser-based flight-combat simulator prototype. (Revision 14: single player only; the multiplayer described below
-was built in M2 and removed again.)
+was built in M2 and removed again. Revision 28: online play is back, hosted in a player's browser, §7.1.)
 - **Teams:** USA and Russia, each flying four **fictional** fighters inspired by real aircraft.
 - **Map:** a large **fictional Eastern European country, "Lechovia"**, whose geography is inspired by Poland:
   - a northern sea coast and a lake district;
@@ -116,7 +120,7 @@ was built in M2 and removed again.)
 - **Weapons:** abstracted gameplay versions of a cannon, a short-range infrared missile, a medium-range radar missile,
   and flares/chaff; in the Strike mode the attackers also carry an abstract free-fall bomb.
 - **Multiplayer:** an authoritative Node.js server validates everything that matters. Browsers predict their own jet
-  and interpolate the rest. AI bots fill empty seats.
+  and interpolate the rest. AI bots fill empty seats. (Revision 28: the host's browser is the authority, §7.1.)
 - **Development order:** a small single-player prototype first, then multiplayer, then expansion.
 
 ## 2. Decisions log
@@ -335,6 +339,61 @@ Removed in revision 14; kept as a record of what was built (code last in commit 
   from the start.
 - **Debugging:** `?lag=<ms>&jitter=<ms>` simulates latency; `?debug=1` shows FPS, RTT, queue depth, prediction error,
   α, n, Mach.
+
+### 7.1 Online play between browsers (revision 28)
+
+The owner asked for online multiplayer again. GitHub Pages serves only files, so there is no game server: one pilot's
+browser hosts the room and runs the match, and the others connect to it directly.
+
+- **Meeting and links (`src/client/net/`):**
+  - Rooms are named by a six-character code (`ROOM_CODE_ALPHABET`: no 0/O or 1/I/L); the invite link is the page with
+    `?join=CODE`, which opens the title screen's Online sheet with the code filled in.
+  - Browsers find each other through Trystero (`@trystero-p2p/nostr`, MIT): the code names a meeting point on public
+    Nostr relays (eight of Trystero's default list, chosen by the app id) where they swap WebRTC offers; Google's and
+    Cloudflare's STUN servers find their public addresses. After that every message goes browser to browser, encrypted,
+    on one ordered, reliable data channel per pair. There is no TURN relay: pairs behind networks that block direct
+    links cannot play together (the join then says so).
+  - `?relay=wss://…` swaps the public relays for self-hosted Trystero WebSocket relays (`@trystero-p2p/ws-relay`), which
+    the browser tests use; the invite link carries it along.
+  - Every browser in a room is linked to every other, but only the host's links carry the game: a pilot says `hello`
+    to everyone it meets, the host alone answers, and from the welcome on the pilot talks to the host only
+    (`MeshHostLink`, `MeshClientLink`).
+- **The host (`HostSession`, `shared/net/room.ts`):**
+  - The host's browser runs the `World` at 60 Hz in a `Room`: the host's own jet, one per pilot (up to `MAX_PILOTS` = 8
+    with the host), AI pilots filling each team to the chosen size (1, 2 or 4 a side; none in Free Flight), input
+    queues, 30 Hz snapshots, events, roster and status. The host flies with no delay through the same views as single
+    player (`WorldViews`, shared with `LocalSession`).
+  - A finished match shows the results to everyone and the next starts by itself after 15 s, with a new seed.
+  - A pilot who leaves (or sends nothing for 30 s; pilots ping every 3 s even while their page is still loading) hands
+    their seat back to an AI pilot. When the host leaves, the room closes and the pilots are told why.
+  - A hidden host tab gets no frames: a tiny worker's timer keeps stepping the match (`BackgroundTicker`), so a host who
+    switches tabs does not freeze the room; pilots' pages do the same, so they are not timed out.
+- **Protocol 5 (`shared/net/protocol.ts`, `codec.ts`):** M2's layout, brought up to date.
+  - `hello` carries the callsign, jet and start; the `welcome` carries the room's settings (mode, map, weather and
+    clock, seats, AI skill), the match seed (the wind comes from it), the tick and the host's callsign.
+  - Inputs: 17 bytes, as in M2. Snapshots: per jet also the gear and load factor (for the vapour); the pilot's own
+    section carries every number of its flight state at 64 bits (`FLIGHT_SCALARS`, `FLIGHT_VECTORS`, a test keeps the
+    list complete), the fuel, the G strain and the tick of a blackout, the respawn countdown and the supply progress.
+- **Prediction (`NetworkSession`):** as in M2, but the own jet is flown by `flyTick` (`shared/world/fly.ts`), the very
+  per-aircraft step the World runs: damage, an empty tank, the runway under the wheels, the wind and its gusts at the
+  host's tick, the fuel burnt, the gear on approach, then the fuel burn and the G strain; a blacked-out pilot's slumped
+  stick is predicted too. In tests the prediction stays within 5 cm of the host at 150 ms each way in gusty rain.
+  - The own tracers bend with the gun's aim assist toward the enemies as drawn on the pilot's screen; the host bends
+    them toward the same enemies where that pilot saw them (lag compensation).
+- **Lag compensation (`combat.ts`):** each pilot's `viewDelay` (half the round trip, the queue and the 100 ms
+  interpolation) sets `viewDelayTicks`; the gun's aim assist and the hit tests take the targets where the pilot saw
+  them, up to 250 ms back and within the target's current life. Missiles and collisions are not rewound.
+- **The game (`game.ts`):**
+  - Online, the match never pauses: with the pause menu or the results up, the jet flies on with the stick centred and
+    the throttle held. The pause menu shows the room's code, who hosts it and *Copy invite link*; its last button is
+    *Close the room* (host) or *Leave the room*.
+  - A badge under the mode status shows `ROOM CODE · n PILOTS` (host) or `ROOM CODE · ms` (pilot).
+  - Quick chat: 7, 8, 9 and 0 send four preset lines to the kill feed of everyone in the room.
+  - Matches online count in the career records and towards pilot levels like any other.
+- **Title screen:** *Online* beside *Campaign* opens the Online sheet: host a room (mode: Dogfight, Air Superiority,
+  Team Objective, Free Flight or Strike; pilots per side; the AI pilots' skill; the map, start and time of day from the
+  title screen) or join one with its code. A failed join or host brings the title screen back with the reason in the
+  sheet. The sheet says that browsers in a room see each other's IP addresses, as in most peer-to-peer games.
 
 ## 8. Flight-model approach
 

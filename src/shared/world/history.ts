@@ -1,7 +1,8 @@
 import type { Vector3 } from 'three';
 
 /**
- * Recent positions and velocities of one aircraft, newest last. Bots use it for delayed perception.
+ * Recent positions and velocities of one aircraft, newest last. Bots use it for delayed perception, and online play
+ * for lag compensation (revision 28).
  */
 export class MotionHistory {
   private readonly capacity: number;
@@ -35,6 +36,19 @@ export class MotionHistory {
     this.vel[i + 1] = vel.y;
     this.vel[i + 2] = vel.z;
     this.count = Math.min(this.count + 1, this.capacity);
+  }
+
+  /**
+   * The position and velocity recorded `ticksAgo` records ago (0 = newest), clamped to the oldest. False when nothing
+   * is recorded.
+   */
+  sampleAt(ticksAgo: number, outPos: Vector3, outVel?: Vector3): boolean {
+    if (this.count === 0) return false;
+    const back = Math.min(Math.max(0, Math.round(ticksAgo)), this.count - 1);
+    const i = ((this.head - back + this.capacity) % this.capacity) * 3;
+    outPos.set(this.pos[i], this.pos[i + 1], this.pos[i + 2]);
+    outVel?.set(this.vel[i], this.vel[i + 1], this.vel[i + 2]);
+    return true;
   }
 
   /**

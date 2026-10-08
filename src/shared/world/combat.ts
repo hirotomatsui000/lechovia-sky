@@ -21,6 +21,9 @@ import type { AircraftEntity } from './entities.ts';
 import type { GameEvent, WeaponKind } from './events.ts';
 import type { GroundTarget } from './ground-targets.ts';
 
+/** Lag compensation never rewinds further than this (250 ms, revision 28). */
+export const MAX_REWIND_TICKS = 15;
+
 /** The parts of the World that combat needs. */
 export interface CombatHost {
   readonly tick: number;
@@ -63,6 +66,9 @@ export class Combat {
   private readonly burst = new Vector3();
   private readonly victimPos = new Vector3();
   private readonly impact = new Vector3();
+  private readonly rewoundPrev = new Vector3();
+  private readonly rewoundPos = new Vector3();
+  private readonly rewoundVel = new Vector3();
   private readonly nose = new Vector3();
   private readonly lead = new Vector3();
   private readonly solution = new Vector3();
@@ -163,10 +169,13 @@ export class Combat {
     const shots = pullTrigger(a, spec, dt, a.stores.cannonRounds);
     if (shots === 0) return;
     const density = atmosphere(a.flight.pos.y, this.air).density;
-    const aim = a.isBot ? null : this.playerAim(a, spec, density);
+    // Online, the shooter saw the others this far in the past: aim and judge the rounds against them there.
+    const rewind = Math.min(Math.max(0, Math.round(a.viewDelayTicks)), MAX_REWIND_TICKS);
+    const aim = a.isBot ? null : this.playerAim(a, spec, density, rewind);
     for (let i = 0; i < shots; i++) {
       const p = createProjectile(this.nextProjectileId++, a, spec, this.host.rng, density, aim);
       if (!a.isBot) p.reach = PLAYER_GUN_REACH;
+      p.rewindTicks = rewind;
       this.projectiles.push(p);
       a.stores.cannonRounds -= spec.roundsPerProjectile;
     }
@@ -176,16 +185,20 @@ export class Combat {
    * Where the player's rounds go (revision 20): bent from the nose toward the firing solution of the enemy that the
    * aim assist pulls hardest, or null when no enemy is close enough to the nose.
    */
-  private playerAim(a: AircraftEntity, spec: CannonSpec, density: number): Vector3 | null {
+  private playerAim(a: AircraftEntity, spec: CannonSpec, density: number, rewind: number): Vector3 | null {
     const f = a.flight;
     this.nose.set(0, 0, -1).applyQuaternion(f.quat);
     const drag = (spec.dragPerM * density) / SEA_LEVEL_DENSITY;
     let best = 0;
     for (const t of this.host.aircraftList()) {
       if (!t.alive || t.team === a.team) continue;
-      const range = f.pos.distanceTo(t.flight.pos);
+      // Where the shooter saw it (online lag compensation, revision 28); where it is offline.
+      const seen = rewind > 0 && t.history.sampleAt(Math.min(rewind, t.history.length - 1), this.rewoundPos, this.rewoundVel);
+      const tPos = seen ? this.rewoundPos : t.flight.pos;
+      const tVel = seen ? this.rewoundVel : t.flight.vel;
+      const range = f.pos.distanceTo(tPos);
       if (range > GUN_ASSIST_RANGE_M) continue;
-      leadDirection(f.pos, f.vel, t.flight.pos, t.flight.vel, spec.muzzleSpeedMs, drag, this.lead);
+      leadDirection(f.pos, f.vel, tPos, tVel, spec.muzzleSpeedMs, drag, this.lead);
       const pull = gunAssistPull(this.nose, this.lead, range);
       if (pull > best) {
         best = pull;
@@ -334,7 +347,16 @@ export class Combat {
       let done = false;
       for (const t of host.aircraftList()) {
         if (!t.alive || t.team === p.team) continue;
-        if (closestApproach(p.prevPos, p.pos, t.prevPos, t.flight.pos, this.approach).distance > t.config.damage.hitRadiusM * p.reach) continue;
+        let from = t.prevPos;
+        let to = t.flight.pos;
+        // Lag compensation: test against the target where the shooter saw it, within its current life only (the
+        // history starts again at every spawn).
+        const back = Math.min(p.rewindTicks, t.history.length - 2);
+        if (back > 0 && t.history.sampleAt(back, this.rewoundPos) && t.history.sampleAt(back + 1, this.rewoundPrev)) {
+          from = this.rewoundPrev;
+          to = this.rewoundPos;
+        }
+        if (closestApproach(p.prevPos, p.pos, from, to, this.approach).distance > t.config.damage.hitRadiusM * p.reach) continue;
         host.applyDamage(t, p.damage, host.getAircraft(p.ownerId) ?? null, 'cannon');
         done = true;
         break;
